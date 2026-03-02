@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 conda run -n anna  --no-capture-output vllm serve /root/autodl-tmp/glide-the/Emotion_inferencer-Qwen2.5-7B-Instruct-GPTQ-4bits --dtype auto --api_key emotion_inferencer --enable-auto-tool-choice --tool-call-parser hermes --served-model-name emotion --gpu-memory-utilization 0.5

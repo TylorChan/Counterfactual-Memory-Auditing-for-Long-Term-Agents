@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1 conda run -n anna --no-capture-output vllm serve  /root/autodl-tmp/GLM-4-32B-Chat-0414-GPTQ-4bits --dtype auto --api_key counselor --served-model-name counselor --port 8002 --trust-remote-code --max-model-len 10240
