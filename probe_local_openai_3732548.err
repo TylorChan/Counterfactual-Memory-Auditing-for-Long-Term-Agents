@@ -1,0 +1,6 @@
+/var/spool/slurmd/job3732548/slurm_script: line 20: rg: command not found
+curl: (7) Failed to connect to localhost port 8000: Connection refused
+curl: (7) Failed to connect to localhost port 8001: Connection refused
+curl: (7) Failed to connect to localhost port 8002: Connection refused
+/var/spool/slurmd/job3732548/slurm_script: line 36: rg: command not found
+/var/spool/slurmd/job3732548/slurm_script: line 36: rg: command not found

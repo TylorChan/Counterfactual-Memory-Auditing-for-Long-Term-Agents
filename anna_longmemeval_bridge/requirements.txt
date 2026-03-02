@@ -1,0 +1,8 @@
+openai==1.12.0
+httpx==0.27.2
+tqdm>=4.66.0
+environs
+pydantic
+python-dotenv
+PyYAML
+-e /users/9/chen7751/csci8980/AnnaAgent
