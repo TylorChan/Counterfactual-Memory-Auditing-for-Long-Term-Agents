@@ -1,0 +1,14 @@
+===== NODE =====
+n35
+Sun Mar  1 18:54:51 CST 2026
+===== LISTEN 8000/8001/8002 =====
+No local listeners on 8000/8001/8002
+===== /v1/models CHECK =====
+--- localhost:8000 ---
+curl failed (service not reachable)
+--- localhost:8001 ---
+curl failed (service not reachable)
+--- localhost:8002 ---
+curl failed (service not reachable)
+===== PROCESS HINT =====
+===== DONE =====
