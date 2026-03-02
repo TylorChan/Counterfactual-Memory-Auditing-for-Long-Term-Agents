@@ -1,0 +1,15 @@
+[submodule "AnnaAgent"]
+	path = AnnaAgent
+	url = https://github.com/sci-m-wang/AnnaAgent.git
+[submodule "LD-Agent"]
+	path = LD-Agent
+	url = https://github.com/leolee99/LD-Agent.git
+[submodule "LongMemEval"]
+	path = LongMemEval
+	url = https://github.com/xiaowu0162/LongMemEval.git
+[submodule "MemoryOS"]
+	path = MemoryOS
+	url = https://github.com/BAI-LAB/MemoryOS.git
+[submodule "SHARE"]
+	path = SHARE
+	url = https://github.com/e1kim/SHARE.git
