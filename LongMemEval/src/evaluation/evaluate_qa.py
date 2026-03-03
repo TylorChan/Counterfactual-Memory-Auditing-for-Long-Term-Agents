@@ -1,11 +1,13 @@
 import os
 import sys
 import json
+from pathlib import Path
 from tqdm import tqdm
 import backoff
 import openai
 from openai import OpenAI
 import numpy as np
+import httpx
 
 
 model_zoo = {
@@ -43,6 +45,34 @@ def get_anscheck_prompt(task, question, answer, response, abstention=False):
     return prompt
 
 
+def load_env_file(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+    return True
+
+
+def load_env_from_candidates() -> str:
+    # Prefer shell env, then local .env, then repo-level .env.
+    candidates = [
+        Path.cwd() / '.env',
+        Path(__file__).resolve().parents[3] / '.env',  # repository root
+        Path(__file__).resolve().parents[2] / '.env',  # LongMemEval/
+    ]
+    for candidate in candidates:
+        if load_env_file(candidate):
+            return str(candidate)
+    return ''
+
+
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print('Usage: python evaluate_qa.py metric_model hyp_file ref_file')
@@ -52,6 +82,10 @@ if __name__ == '__main__':
     hyp_file = sys.argv[2]
     ref_file = sys.argv[3]
     verbose = True
+
+    loaded_env_path = load_env_from_candidates()
+    if loaded_env_path:
+        print(f'Loaded env from {loaded_env_path}')
     
     result_file = hyp_file + '.eval-results-{}'.format(metric_model_short)
 
@@ -63,14 +97,28 @@ if __name__ == '__main__':
         openai.organization = os.getenv('OPENAI_ORGANIZATION')
         openai_api_key = os.getenv('OPENAI_API_KEY')
         openai_api_base = None
+        if not openai_api_key:
+            print('Missing OPENAI_API_KEY. Set it in shell env or .env file.')
+            exit(2)
     else:
         openai_api_key = "EMPTY"
         openai_api_base = "http://localhost:8001/v1"
     
-    metric_client = OpenAI(
-        api_key=openai_api_key,
-        base_url=openai_api_base,
-    )
+    client_kwargs = {
+        'api_key': openai_api_key,
+        'base_url': openai_api_base,
+    }
+    try:
+        metric_client = OpenAI(**client_kwargs)
+    except TypeError as e:
+        # Compatibility fallback for openai==1.35.1 with newer httpx (e.g., 0.28+)
+        # where OpenAI's internal wrapper may pass unsupported kwargs (e.g., proxies).
+        if "unexpected keyword argument 'proxies'" not in str(e):
+            raise
+        metric_client = OpenAI(
+            **client_kwargs,
+            http_client=httpx.Client(),
+        )
 
     try:
         hypotheses = [json.loads(line) for line in open(hyp_file).readlines()]

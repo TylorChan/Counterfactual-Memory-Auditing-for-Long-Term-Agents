@@ -1234,7 +1234,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--limit", type=int, default=0, help="0 means full dataset.")
     parser.add_argument("--offset", type=int, default=0)
-    parser.add_argument("--memory-max-items", type=int, default=10)
+    parser.add_argument(
+        "--memory-max-items",
+        type=int,
+        default=0,
+        help="Per-bucket memory cap; 0 disables capping.",
+    )
     parser.add_argument("--selection-top-k", type=int, default=6)
     parser.add_argument(
         "--strict-selection-mode",
