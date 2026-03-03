@@ -21,6 +21,7 @@ LLM_MODEL="${LLM_MODEL:-gpt-4o-mini}"
 OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 RUN_TAG="${RUN_TAG:-s_50}"
 SHARE_STRICT_SELECTION_MODE="${SHARE_STRICT_SELECTION_MODE:-qa}"
+SHARE_MEMORY_MAX_ITEMS="${SHARE_MEMORY_MAX_ITEMS:-0}"
 AGENT="${AGENT:-all}"
 FAIL_FAST="${FAIL_FAST:-1}"
 
@@ -96,6 +97,7 @@ run_share() {
     --out-jsonl "${SHARE_OUT}" \
     --trace-jsonl "${SHARE_TRACE}" \
     --strict-selection-mode "${SHARE_STRICT_SELECTION_MODE}" \
+    --memory-max-items "${SHARE_MEMORY_MAX_ITEMS}" \
     "${COMMON_ARGS[@]}" \
     "${LIMIT_ARGS[@]}" \
     "${OFFSET_ARGS[@]}"
