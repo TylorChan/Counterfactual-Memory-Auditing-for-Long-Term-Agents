@@ -5,4 +5,4 @@ environs
 pydantic
 python-dotenv
 PyYAML
--e /users/9/chen7751/csci8980/AnnaAgent
+-e ../AnnaAgent
