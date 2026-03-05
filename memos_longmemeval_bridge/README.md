@@ -15,8 +15,8 @@ This directory contains an isolated integration runner to evaluate `MemoryOS` on
 ## Prerequisites
 
 1. Both repos exist locally:
-- `/users/9/chen7751/csci8980/MemoryOS`
-- `/users/9/chen7751/csci8980/LongMemEval`
+- `<repo-root>/MemoryOS`
+- `<repo-root>/LongMemEval`
 
 2. Python env has MemoryOS dependencies installed (at least those used by `memoryos-pypi`).
 
@@ -38,7 +38,8 @@ Existing exported env vars are kept (the `.env` loader does not override them).
 Use a dedicated conda env for this bridge (CPU workflow):
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 conda create -n memos-lme python=3.10 -y
 conda activate memos-lme
 python -m pip install --upgrade pip setuptools wheel
@@ -47,7 +48,7 @@ python -m pip install --upgrade pip setuptools wheel
 conda install -y -c conda-forge faiss-cpu
 
 # Upstream requirements include faiss-gpu; filter it out for CPU env
-grep -v '^faiss-gpu' /users/9/chen7751/csci8980/MemoryOS/memoryos-pypi/requirements.txt \
+grep -v '^faiss-gpu' "$REPO_ROOT/MemoryOS/memoryos-pypi/requirements.txt" \
   > /tmp/memoryos_requirements_cpu.txt
 python -m pip install -r /tmp/memoryos_requirements_cpu.txt
 
@@ -64,11 +65,12 @@ python -c "import faiss, openai, sentence_transformers, tqdm; print('memos-lme r
 ## Quick start (smoke test)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python memos_longmemeval_bridge/run_infer.py \
-  --memoryos-dir /users/9/chen7751/csci8980/MemoryOS \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_smoke.jsonl \
+  --memoryos-dir "$REPO_ROOT/MemoryOS" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_smoke.jsonl" \
   --limit 3 \
   --llm-model gpt-4o-mini
 ```
@@ -76,11 +78,12 @@ python memos_longmemeval_bridge/run_infer.py \
 Dry-run (no API call, validate pipeline/output format only):
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python memos_longmemeval_bridge/run_infer.py \
-  --memoryos-dir /users/9/chen7751/csci8980/MemoryOS \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_dryrun.jsonl \
+  --memoryos-dir "$REPO_ROOT/MemoryOS" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_dryrun.jsonl" \
   --limit 3 \
   --dry-run
 ```
@@ -88,10 +91,11 @@ python memos_longmemeval_bridge/run_infer.py \
 Then evaluate:
 
 ```bash
-cd /users/9/chen7751/csci8980/LongMemEval/src/evaluation
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT/LongMemEval/src/evaluation"
 python evaluate_qa.py gpt-4o \
-  /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_smoke.jsonl \
-  /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned.json
+  "$REPO_ROOT/LongMemEval/preds_memoryos_s_smoke.jsonl" \
+  "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json"
 ```
 
 ## Main run (50-question stratified subset)
@@ -100,12 +104,13 @@ So I pick 50 question (multi-session: 12; temporal-reasoning: 12; knowledge-upda
 Run the fixed 50-question subset in `longmemeval_s_cleaned_50.json`:
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python memos_longmemeval_bridge/run_infer.py \
-  --memoryos-dir /users/9/chen7751/csci8980/MemoryOS \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_50.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_50.trace.jsonl \
+  --memoryos-dir "$REPO_ROOT/MemoryOS" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_50.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_50.trace.jsonl" \
   --reset-mode reinit \
   --llm-model gpt-4o-mini \
   --fail-fast
@@ -126,12 +131,13 @@ python evaluate_qa.py gpt-4o \
 Run all samples in `longmemeval_s_cleaned.json` (slow and expensive):
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python memos_longmemeval_bridge/run_infer.py \
-  --memoryos-dir /users/9/chen7751/csci8980/MemoryOS \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_full.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_memoryos_s_full.trace.jsonl \
+  --memoryos-dir "$REPO_ROOT/MemoryOS" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_full.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_memoryos_s_full.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --fail-fast
 ```

@@ -11,10 +11,11 @@
 conda create -n anna-lme python=3.10 -y
 conda activate anna-lme
 pip install --upgrade pip
-pip install -r /users/9/chen7751/csci8980/anna_longmemeval_bridge/requirements.txt
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+pip install -r "$REPO_ROOT/anna_longmemeval_bridge/requirements.txt"
 ```
 
-Set key (or put it in `/users/9/chen7751/csci8980/.env`):
+Set key (or put it in `$REPO_ROOT/.env`):
 
 ```bash
 export OPENAI_API_KEY=...
@@ -23,12 +24,13 @@ export OPENAI_API_KEY=...
 ## Run (50-question subset)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python anna_longmemeval_bridge/run_infer.py \
-  --anna-agent-dir /users/9/chen7751/csci8980/AnnaAgent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_anna_s_50.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_anna_s_50.trace.jsonl \
+  --anna-agent-dir "$REPO_ROOT/AnnaAgent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_anna_s_50.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_anna_s_50.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --fail-fast
 ```
@@ -36,10 +38,11 @@ python anna_longmemeval_bridge/run_infer.py \
 Dry run:
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 python anna_longmemeval_bridge/run_infer.py \
-  --anna-agent-dir /users/9/chen7751/csci8980/AnnaAgent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_anna_s_50_dryrun.jsonl \
+  --anna-agent-dir "$REPO_ROOT/AnnaAgent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_anna_s_50_dryrun.jsonl" \
   --limit 3 \
   --dry-run
 ```

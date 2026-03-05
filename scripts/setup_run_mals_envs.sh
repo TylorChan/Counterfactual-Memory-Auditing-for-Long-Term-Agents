@@ -79,6 +79,9 @@ rm -f "${TMP_REQ}"
 echo "[SETUP] ld-lme"
 conda activate ld-lme
 python -m pip install --upgrade pip
+# chromadb==0.4.22 is not compatible with NumPy 2.x (uses np.float_).
+# Pin NumPy 1.26.x to avoid runtime import error in LD-Agent EventMemory.
+python -m pip install --force-reinstall --no-cache-dir numpy==1.26.4
 python -m pip install \
   openai==1.12.0 \
   httpx==0.27.2 \

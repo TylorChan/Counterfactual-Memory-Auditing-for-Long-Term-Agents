@@ -12,15 +12,24 @@ This folder provides an isolated runner to evaluate `LD-Agent` on `LongMemEval` 
 conda create -n ld-lme python=3.10 -y
 conda activate ld-lme
 pip install --upgrade pip
+pip install --force-reinstall --no-cache-dir numpy==1.26.4
 pip install openai==1.12.0 httpx==0.27.2 chromadb==0.4.22 spacy==3.7.4 tqdm pillow
 pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl"
+```
+
+If you see `AttributeError: np.float_ was removed in the NumPy 2.0 release`,
+reinstall NumPy in `ld-lme`:
+
+```bash
+conda activate ld-lme
+python -m pip install --force-reinstall --no-cache-dir numpy==1.26.4
 ```
 
 ## Prerequisites
 
 1. Local repos exist:
-- `/users/9/chen7751/csci8980/LD-Agent`
-- `/users/9/chen7751/csci8980/LongMemEval`
+- `<repo-root>/LD-Agent`
+- `<repo-root>/LongMemEval`
 
 2. Python environment includes at least:
 - `openai`
@@ -43,7 +52,7 @@ export OPENAI_API_KEY=...
 
 `run_infer.py` auto-loads `.env` from:
 - current working directory
-- workspace root (`/users/9/chen7751/csci8980/.env`)
+- workspace root (`<repo-root>/.env`)
 - bridge folder (`ldagent_longmemeval_bridge/.env`)
 
 By default, existing environment variables are not overridden.
@@ -51,12 +60,13 @@ By default, existing environment variables are not overridden.
 ## Quick start (smoke test)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python ldagent_longmemeval_bridge/run_infer.py \
-  --ld-agent-dir /users/9/chen7751/csci8980/LD-Agent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50_smoke.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50_smoke.trace.jsonl \
+  --ld-agent-dir "$REPO_ROOT/LD-Agent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50_smoke.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50_smoke.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --limit 3
 ```
@@ -64,11 +74,12 @@ python ldagent_longmemeval_bridge/run_infer.py \
 Dry-run (no API calls):
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python ldagent_longmemeval_bridge/run_infer.py \
-  --ld-agent-dir /users/9/chen7751/csci8980/LD-Agent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50_dryrun.jsonl \
+  --ld-agent-dir "$REPO_ROOT/LD-Agent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50_dryrun.jsonl" \
   --limit 3 \
   --dry-run
 ```
@@ -76,12 +87,13 @@ python ldagent_longmemeval_bridge/run_infer.py \
 ## Main run (50-question subset)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python ldagent_longmemeval_bridge/run_infer.py \
-  --ld-agent-dir /users/9/chen7751/csci8980/LD-Agent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50.trace.jsonl \
+  --ld-agent-dir "$REPO_ROOT/LD-Agent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50.trace.jsonl" \
   --session-gap-seconds 600 \
   --llm-model gpt-4o-mini \
   --fail-fast
@@ -95,12 +107,13 @@ This command aligns more closely with LD-Agent paper choices for memory behavior
 - `--dist-thres 0.5`
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python ldagent_longmemeval_bridge/run_infer.py \
-  --ld-agent-dir /users/9/chen7751/csci8980/LD-Agent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50_paper.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_50_paper.trace.jsonl \
+  --ld-agent-dir "$REPO_ROOT/LD-Agent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50_paper.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_50_paper.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --session-gap-seconds 600 \
   --no-force-flush-before-answer \
@@ -122,12 +135,13 @@ python evaluate_qa.py gpt-4o \
 ## Full run (LongMemEval-S, 500 questions)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python ldagent_longmemeval_bridge/run_infer.py \
-  --ld-agent-dir /users/9/chen7751/csci8980/LD-Agent \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_full.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_ldagent_s_full.trace.jsonl \
+  --ld-agent-dir "$REPO_ROOT/LD-Agent" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_full.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_ldagent_s_full.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --fail-fast
 ```

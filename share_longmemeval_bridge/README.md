@@ -9,10 +9,11 @@
 conda create -n share-lme python=3.10 -y
 conda activate share-lme
 pip install --upgrade pip
-pip install -r /users/9/chen7751/csci8980/share_longmemeval_bridge/requirements.txt
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+pip install -r "$REPO_ROOT/share_longmemeval_bridge/requirements.txt"
 ```
 
-Set key (or put it in `/users/9/chen7751/csci8980/.env`):
+Set key (or put it in `$REPO_ROOT/.env`):
 
 ```bash
 export OPENAI_API_KEY=...
@@ -21,12 +22,13 @@ export OPENAI_API_KEY=...
 ## Run (50-question subset)
 
 ```bash
-cd /users/9/chen7751/csci8980
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 python share_longmemeval_bridge/run_infer.py \
-  --share-dir /users/9/chen7751/csci8980/SHARE \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_share_s_50.jsonl \
-  --trace-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_share_s_50.trace.jsonl \
+  --share-dir "$REPO_ROOT/SHARE" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_share_s_50.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_share_s_50.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --strict-selection-mode qa \
   --fail-fast
@@ -35,10 +37,11 @@ python share_longmemeval_bridge/run_infer.py \
 Dry run:
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 python share_longmemeval_bridge/run_infer.py \
-  --share-dir /users/9/chen7751/csci8980/SHARE \
-  --longmemeval-file /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /users/9/chen7751/csci8980/LongMemEval/preds_share_s_50_dryrun.jsonl \
+  --share-dir "$REPO_ROOT/SHARE" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_share_s_50_dryrun.jsonl" \
   --limit 3 \
   --dry-run
 ```
