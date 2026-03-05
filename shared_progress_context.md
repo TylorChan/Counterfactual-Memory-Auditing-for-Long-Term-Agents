@@ -19,35 +19,23 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 ## Google VM progress summary (latest)
 
 - Update time (UTC): 2026-03-05
-- High-level progress: bridge alignment + evaluation compatibility work is mostly done; experiment execution is still the bottleneck.
-- Objective status: 50-question fair comparison across 4 agents is not complete yet (`Anna` done, `SHARE` done, `MemoryOS` partial, `LD-Agent` pending).
-- Agent run status:
-  - `Anna`: `LongMemEval/preds_anna_s_50.jsonl` = 50/50.
-  - `SHARE (max10 old run)`: `LongMemEval/preds_share_s_50_max10MemoryCap.jsonl` = 50/50.
-  - `SHARE (nocap current run)`: `LongMemEval/preds_share_s_50_nocap.jsonl` = 50/50.
-  - `MemoryOS base file`: `LongMemEval/preds_memoryos_s_50.jsonl` = 18/50.
-  - `MemoryOS resume file`: `LongMemEval/preds_memoryos_s_50.resume.jsonl` = 31 lines (not merged to a final 50-line file yet).
-  - `LD-Agent`: `LongMemEval/preds_ldagent_s_50.jsonl` missing.
-- Evaluation snapshot (gpt-4o autoeval on available files):
-  - `Anna`: `15/50 = 0.30` from `preds_anna_s_50.jsonl.eval-results-gpt-4o`.
-  - `SHARE max10`: `7/50 = 0.14` from `preds_share_s_50_max10MemoryCap.jsonl.eval-results-gpt-4o`.
-  - `SHARE nocap`: `10/50 = 0.20` from `preds_share_s_50_nocap.jsonl.eval-results-gpt-4o`.
-  - Observed delta: removing SHARE memory cap improved accuracy by `+0.06` absolute on this subset (`0.14 -> 0.20`).
-- Important implemented decisions (for cross-machine continuity):
-  - SHARE bridge default memory cap is disabled (`--memory-max-items` default `0`) in `share_longmemeval_bridge/run_infer.py`.
-  - Bridge evaluation commands were migrated to machine-independent `REPO_ROOT` style in bridge READMEs.
-  - `LongMemEval/src/evaluation/evaluate_qa.py` now auto-loads `.env` key and includes compatibility fallback for `proxies`/httpx client init.
-- Runtime/ops facts:
-  - `LongMemEval/memoryos_progress_record.txt` still shows checkpoint `18/50` with PID `191860`; PID is no longer running.
-  - Current working tree contains many runtime-output diffs; treat them as experiment artifacts until final selection/cleanup.
-- Blockers / risks:
-  - No finalized MemoryOS 50-line merged output yet.
-  - LD-Agent run has not produced the 50-question predictions file yet.
-  - Final 4-agent table (accuracy + per-task + runtime) still pending because 2 agents are incomplete.
-- Next steps (handoff-ready):
-  - Complete MemoryOS run and produce one final deduplicated/merged `preds_memoryos_s_50*.jsonl`.
-  - Run LD-Agent 50-question bridge inference and generate `preds_ldagent_s_50.jsonl`.
-  - Evaluate all final 4 files with `evaluate_qa.py`, then build one consolidated comparison table.
+- High-level progress:
+  - Cross-agent bridge alignment is mostly complete; final benchmarking is in the execution/consolidation phase.
+  - 50-question plan is partially complete: Anna and SHARE have completed runs, while MemoryOS and LD-Agent still need finalization for a fair 4-agent table.
+- Conversation highlights so far:
+  - We established a cross-machine continuity workflow (shared context + structured handoff/changelog) so VM/MSI/Mac Codex sessions can resume with minimal context loss.
+  - We standardized bridge run/evaluation commands to machine-agnostic pathing (`REPO_ROOT`) instead of hard-coded absolute paths.
+  - We fixed evaluation reliability issues (`OPENAI_API_KEY` loading and OpenAI/httpx compatibility handling in `evaluate_qa.py`).
+  - We diagnosed SHARE memory bottlenecks and moved to no-cap memory setting as the primary comparison direction.
+  - We diagnosed and fixed LD-Agent startup failure caused by `chromadb` vs NumPy 2.x mismatch by pinning NumPy 1.26.4.
+  - We aligned a Git sync workflow for multi-machine work (`push` from source machine, `pull/reset` on target machine).
+- Current risks:
+  - Final report is blocked until MemoryOS and LD-Agent produce finalized comparable outputs.
+  - Runtime artifacts and partial/resume outputs still need consolidation into one clean final result set.
+- Next actions:
+  - Finish remaining agent runs and finalize one prediction file per agent for the same 50-question subset.
+  - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
+  - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
 ## My laptop progress summary
 
