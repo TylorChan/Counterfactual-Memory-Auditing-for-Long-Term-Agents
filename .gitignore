@@ -1,2 +1,39 @@
 .env
 data_backups/
+.venv-chatgpt-eval/
+chatgpt_project_eval/profile.local.json
+chatgpt_project_eval/traces/
+LongMemEval/preds_chatgpt_project_memory*.jsonl
+
+# macOS / Python caches
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# LongMemEval predictions / traces / eval artifacts
+LongMemEval/preds_*.jsonl
+LongMemEval/*.trace.jsonl
+LongMemEval/*.jsonl.eval-results-*
+LongMemEval/*.eval-results-*
+LongMemEval/memoryos_progress_record.txt
+
+# Bridge runtime artifacts
+theanine_longmemeval_bridge/runtime/
+chatgpt_project_eval/traces/
+chatgpt_web_eval/traces/
+
+# Local browser state for ChatGPT Web automation
+chatgpt_web_eval/browser_profile/
+chatgpt_web_eval/chrome_cdp_profile/
+
+# Temporary / scratch outputs
+tmp_share/
+*.log
+# Slurm stdout / stderr
+*.out
+*.err
+
+# THEANINE generated bridge episodes
+Theanine/resources/data/bridge_*.json
