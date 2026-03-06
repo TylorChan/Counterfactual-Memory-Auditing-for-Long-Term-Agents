@@ -16,7 +16,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 6. Only record facts that are verifiable from files, logs, commands, or explicit user confirmation.
 7. If a value is uncertain, mark it as `TBD` instead of guessing.
 
-## Google VM progress summary (latest)
+## Google VM progress summary
 
 - Update time (UTC): 2026-03-05
 - High-level progress:
@@ -37,6 +37,32 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary
+## My laptop progress summary (latest)
+
+
+- Update time (UTC): 2026-03-06 17:33:30
+- High-level progress: MacBook-side automation and THEANINE integration both advanced materially; ChatGPT Web project automation is now working end-to-end for smoke cases, and THEANINE bridge now supports full-history LongMemEval adaptation.
+- Completed:
+  - Built `/Users/daqingchen/csci8980/chatgpt_web_eval` Playwright automation for ChatGPT Web using an existing Chrome CDP session.
+  - Verified project creation flow on ChatGPT Web: expand `Projects` -> `New project` -> set `Project-only` memory -> reopen project settings -> write instructions -> click `Save`.
+  - Added single-question runner and batch runner with tqdm-like progress formatting under `/Users/daqingchen/csci8980/chatgpt_web_eval`.
+  - Updated ChatGPT Web protocol so each session starts with `For this conversation only, assume the current date is <session_date>. Use this date when answering in this chat.`
+  - Updated project instructions to constrain verbosity globally for both replay chats and final QA.
+  - Forked / cloned `/Users/daqingchen/csci8980/Theanine` and built `/Users/daqingchen/csci8980/theanine_longmemeval_bridge`.
+  - Patched local THEANINE upstream to support dynamic session counts instead of the original fixed `4 history + 1 current` design.
+  - Patched local THEANINE memory-key parsing to support multi-digit session ids such as `s10-m1`.
+  - Verified full-history dry-run for THEANINE: first question `gpt4_9a159967` now uses `46` history sessions plus QA session `47` in `/Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_fullhist_dryrun.trace.jsonl`.
+- In progress:
+  - Real full-history THEANINE smoke run in `theanine-lme` environment is running / being validated for runtime viability.
+  - ChatGPT Web batch automation exists, but full 50-question product run is not practically viable under ChatGPT message caps.
+- Blockers / risks:
+  - ChatGPT Plus product-side `GPT-5.3 Instant` message limits are a hard bottleneck for full 50-question LongMemEval replay; exact count computation showed every question in `longmemeval_s_cleaned_50.json` exceeds the 160 messages / 3h cap under the current replay protocol.
+  - ChatGPT Web product baseline is therefore suitable only for smoke / small-sample product evaluation, not full 50-question main-table evaluation.
+  - THEANINE full-history adaptation is now code-complete locally, but runtime cost may be very high because graph construction now scales over all history sessions per question.
+- Next steps:
+  - Let the THEANINE full-history smoke finish, then decide whether full 50-question execution is tractable on available budget/time.
+  - If THEANINE full-history is too slow, run an explicit truncated-history ablation with `--history-sessions N` and label it as such.
+  - Keep ChatGPT Web automation for product-side smoke / supplementary baseline only, not main agent comparison.
+
 
 ## MSI progress summary
