@@ -34,8 +34,15 @@ class Retriever:
         memory_val = []
         memory_embedding = {}
         for key, val in memory.items():
+            if not isinstance(val, str):
+                continue
+            val = val.strip()
+            if not val:
+                continue
             memory_key.append(key)
             memory_val.append(val)
+        if not memory_val:
+            return memory_embedding
         response = self.embedding_openai(memory_val)
         for i in range(len(memory_key)):
             memory_embedding[memory_key[i]] = {'text': memory_val[i], 'embedding': response.data[i].embedding}
@@ -71,4 +78,3 @@ class Retriever:
         for retrieved_node, score in retrieved_nodes:
             retrieved_memory.append({retrieved_node: memory_past[retrieved_node]['text']})
         return retrieved_memory
-

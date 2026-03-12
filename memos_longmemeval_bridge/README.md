@@ -92,8 +92,7 @@ Then evaluate:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT/LongMemEval/src/evaluation"
-python evaluate_qa.py gpt-4o \
+python "$REPO_ROOT/LongMemEval/src/evaluation/evaluate_qa.py" gpt-4o \
   "$REPO_ROOT/LongMemEval/preds_memoryos_s_smoke.jsonl" \
   "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned.json"
 ```
@@ -120,9 +119,8 @@ Evaluate 50-question outputs:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT/LongMemEval/src/evaluation"
-python evaluate_qa.py gpt-4o \
-  "$REPO_ROOT/LongMemEval/preds_memoryos_s_50.jsonl" \
+python "$REPO_ROOT/LongMemEval/src/evaluation/evaluate_qa.py" gpt-4o \
+  "$REPO_ROOT/LongMemEval/preds_memoryos_s_50.resumed_merged.jsonl" \
   "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json"
 ```
 

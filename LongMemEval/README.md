@@ -93,8 +93,8 @@ To test on LongMemEval, you may directly feed the timestamped history to your ow
 ```
 export OPENAI_API_KEY=YOUR_API_KEY
 export OPENAI_ORGANIZATION=YOUR_ORGANIZATION     # may be omitted if your key belongs to only one organization
-cd src/evaluation
-python3 evaluate_qa.py gpt-4o your_hypothesis_file ../../data/longmemeval_oracle.json
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+python3 "$REPO_ROOT/LongMemEval/src/evaluation/evaluate_qa.py" gpt-4o your_hypothesis_file "$REPO_ROOT/LongMemEval/data/longmemeval_oracle.json"
 ```
 
 Running this script will save the evaluation logs into a file called `[your_hypothesis_file].log`. In this file, each line will contain a new field called `autoeval_label`. While `evaluate_qa.py` already reports the averaged scores, you can also aggregate the scores from the log using the following command:

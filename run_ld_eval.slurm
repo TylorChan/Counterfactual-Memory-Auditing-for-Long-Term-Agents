@@ -1,9 +1,10 @@
 #!/bin/bash -l
 #SBATCH --job-name=lme_ldev
 #SBATCH --partition=msismall
-#SBATCH --time=24:00:00
+#SBATCH --time=96:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
+#SBATCH --constraint=genoa
 #SBATCH --mem=24g
 #SBATCH --tmp=20g
 #SBATCH --output=%x_%j.out
