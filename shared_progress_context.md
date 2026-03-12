@@ -2,19 +2,16 @@
 This file is the cross-machine progress context for this repo. Use it so Codex on Google VM, laptop, and MSI can quickly align on current status, decisions, blockers, and next actions.
 
 1. Identify which machine section to update based on the user's request.
-2. Append one new update block with a UTC timestamp instead of overwriting older notes.
-3. Keep each update block concise and structured with:
-   - High-level progress
-   - Completed
-   - In progress
-   - Blockers / risks
-   - Next steps
-4. Remove duplicate points inside the same machine section while preserving the most recent factual version.
-5. Keep exactly one `(latest)` label in the whole file:
+2. Prefer maintaining one concise summary block per machine section instead of appending many historical update blocks.
+3. Keep the machine section concise and factual; do not add workflow headers such as `High-level progress`, `Completed`, `In progress`, `Blockers`, or `Next steps` unless the user explicitly asks for that structure.
+4. Summarize only facts that are verifiable from repo files, logs, commands, or explicit user confirmation.
+5. Preserve discussion outcomes that materially affect experiment design, interpretation, fairness, runtime decisions, or evaluation protocol.
+6. Remove duplicate or stale points inside the same machine section while preserving the newest factual wording.
+7. Keep exactly one `(latest)` label in the whole file:
    - Add `(latest)` to the section you updated.
    - Remove `(latest)` from all other section titles.
-6. Only record facts that are verifiable from files, logs, commands, or explicit user confirmation.
-7. If a value is uncertain, mark it as `TBD` instead of guessing.
+8. Include one rough UTC timestamp for the updated section when helpful; exact minute precision is optional.
+9. If a value is uncertain, mark it as `TBD` instead of guessing.
 
 ## Google VM progress summary
 
