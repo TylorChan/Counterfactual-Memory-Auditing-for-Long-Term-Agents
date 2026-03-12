@@ -1,0 +1,4 @@
+interface:
+  display_name: "Summarize Context"
+  short_description: "Update shared machine context summaries"
+  default_prompt: "Use $summarize-context to merge recent verified progress into shared_progress_context.md."
