@@ -27,7 +27,7 @@ The trace file records:
 ## Upstream patch in this workspace
 
 This bridge now relies on a local upstream patch under:
-- `/Users/daqingchen/csci8980/Theanine`
+- `"$REPO_ROOT/Theanine"`
 
 The patch makes THEANINE handle:
 - dynamic session counts,
@@ -39,28 +39,31 @@ This is no longer the original fixed `4 history + 1 current` upstream behavior.
 ## Environment
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 conda create -n theanine-lme python=3.10 -y
 conda activate theanine-lme
 pip install --upgrade pip
-pip install -r /Users/daqingchen/csci8980/theanine_longmemeval_bridge/requirements.txt
+pip install -r "$REPO_ROOT/theanine_longmemeval_bridge/requirements.txt"
 ```
 
-Set key (or put it in `/Users/daqingchen/csci8980/.env`):
+Set key (or put it in `"$REPO_ROOT/.env"`):
 
 ```bash
 export OPENAI_API_KEY=...
 ```
 
-The bridge writes `/Users/daqingchen/csci8980/Theanine/conf.d/config.yaml` at runtime because upstream code expects that file.
+The bridge writes `"$REPO_ROOT/Theanine/conf.d/config.yaml"` at runtime because upstream code expects that file.
 
 ## Smoke test
 
 ```bash
-conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval_bridge/run_infer.py \
-  --theanine-dir /Users/daqingchen/csci8980/Theanine \
-  --longmemeval-file /Users/daqingchen/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_smoke.jsonl \
-  --trace-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_smoke.trace.jsonl \
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+python "$REPO_ROOT/theanine_longmemeval_bridge/run_infer.py" \
+  --theanine-dir "$REPO_ROOT/Theanine" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_smoke.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_smoke.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --limit 1 \
   --fail-fast
@@ -69,22 +72,26 @@ conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval
 ## Main run (50-question subset, full history)
 
 ```bash
-conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval_bridge/run_infer.py \
-  --theanine-dir /Users/daqingchen/csci8980/Theanine \
-  --longmemeval-file /Users/daqingchen/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50.jsonl \
-  --trace-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50.trace.jsonl \
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+python "$REPO_ROOT/theanine_longmemeval_bridge/run_infer.py" \
+  --theanine-dir "$REPO_ROOT/Theanine" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50.trace.jsonl" \
   --llm-model gpt-4o-mini
 ```
 
 ## Optional truncated-history run
 
 ```bash
-conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval_bridge/run_infer.py \
-  --theanine-dir /Users/daqingchen/csci8980/Theanine \
-  --longmemeval-file /Users/daqingchen/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_hist10.jsonl \
-  --trace-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_hist10.trace.jsonl \
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+python "$REPO_ROOT/theanine_longmemeval_bridge/run_infer.py" \
+  --theanine-dir "$REPO_ROOT/Theanine" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_hist10.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_hist10.trace.jsonl" \
   --llm-model gpt-4o-mini \
   --history-sessions 10
 ```
@@ -92,11 +99,13 @@ conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval
 ## Dry run
 
 ```bash
-conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval_bridge/run_infer.py \
-  --theanine-dir /Users/daqingchen/csci8980/Theanine \
-  --longmemeval-file /Users/daqingchen/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json \
-  --out-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_dryrun.jsonl \
-  --trace-jsonl /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_dryrun.trace.jsonl \
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+python "$REPO_ROOT/theanine_longmemeval_bridge/run_infer.py" \
+  --theanine-dir "$REPO_ROOT/Theanine" \
+  --longmemeval-file "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json" \
+  --out-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_dryrun.jsonl" \
+  --trace-jsonl "$REPO_ROOT/LongMemEval/preds_theanine_s_50_dryrun.trace.jsonl" \
   --limit 3 \
   --dry-run
 ```
@@ -104,8 +113,8 @@ conda run -n theanine-lme python /Users/daqingchen/csci8980/theanine_longmemeval
 ## Evaluate with LongMemEval script
 
 ```bash
-cd /Users/daqingchen/csci8980/LongMemEval/src/evaluation
-python evaluate_qa.py gpt-4o \
-  /Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50.jsonl \
-  /Users/daqingchen/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+python "$REPO_ROOT/LongMemEval/src/evaluation/evaluate_qa.py" gpt-4o \
+  "$REPO_ROOT/LongMemEval/preds_theanine_s_50.jsonl" \
+  "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json"
 ```

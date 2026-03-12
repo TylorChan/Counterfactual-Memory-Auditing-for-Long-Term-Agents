@@ -164,6 +164,40 @@ def build_episode(entry: Dict, history_indices: List[int], omit_question_date: b
     return episode
 
 
+def build_trace_stub(
+    entry: Dict,
+    history_sessions: int,
+    preserve_session_order: bool,
+    omit_question_date: bool,
+    seed: int,
+) -> Dict:
+    ordered_indices = sorted_session_indices(entry, preserve_session_order=preserve_session_order)
+    if history_sessions > 0:
+        selected_indices = ordered_indices[:history_sessions]
+    else:
+        selected_indices = ordered_indices
+
+    selected_session_ids = [entry["haystack_session_ids"][i] for i in selected_indices]
+    selected_session_dates = [entry["haystack_dates"][i] for i in selected_indices]
+    omitted_answer_session_ids = [
+        sid for sid in entry.get("answer_session_ids", []) if sid not in set(selected_session_ids)
+    ]
+    return {
+        "question_id": entry["question_id"],
+        "question_type": entry["question_type"],
+        "history_sessions_requested": history_sessions,
+        "history_sessions_used": len(selected_indices),
+        "selected_history_indices": selected_indices,
+        "selected_session_ids": selected_session_ids,
+        "selected_session_dates": selected_session_dates,
+        "qa_session_num": len(selected_indices) + 1,
+        "answer_session_ids": entry.get("answer_session_ids", []),
+        "omitted_answer_session_ids": omitted_answer_session_ids,
+        "question_date_used": None if omit_question_date else entry.get("question_date"),
+        "seed": seed,
+    }
+
+
 def write_episode_json(path: Path, episode: Dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps([episode], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -188,11 +222,6 @@ def run_theanine_for_entry(
     else:
         selected_indices = ordered_indices
 
-    selected_session_ids = [entry["haystack_session_ids"][i] for i in selected_indices]
-    selected_session_dates = [entry["haystack_dates"][i] for i in selected_indices]
-    omitted_answer_session_ids = [
-        sid for sid in entry.get("answer_session_ids", []) if sid not in set(selected_session_ids)
-    ]
     episode = build_episode(entry, selected_indices, omit_question_date=omit_question_date)
     qa_session_num = len(selected_indices) + 1
 
@@ -211,20 +240,13 @@ def run_theanine_for_entry(
     episode_path = upstream_data_dir / episode_filename
     write_episode_json(episode_path, episode)
 
-    trace = {
-        "question_id": entry["question_id"],
-        "question_type": entry["question_type"],
-        "history_sessions_requested": history_sessions,
-        "history_sessions_used": len(selected_indices),
-        "selected_history_indices": selected_indices,
-        "selected_session_ids": selected_session_ids,
-        "selected_session_dates": selected_session_dates,
-        "qa_session_num": qa_session_num,
-        "answer_session_ids": entry.get("answer_session_ids", []),
-        "omitted_answer_session_ids": omitted_answer_session_ids,
-        "question_date_used": None if omit_question_date else entry.get("question_date"),
-        "seed": seed,
-    }
+    trace = build_trace_stub(
+        entry=entry,
+        history_sessions=history_sessions,
+        preserve_session_order=preserve_session_order,
+        omit_question_date=omit_question_date,
+        seed=seed,
+    )
 
     if dry_run:
         hypothesis = f"[dry-run] THEANINE would answer question {entry['question_id']}"
@@ -354,10 +376,20 @@ def main() -> None:
             fail += 1
             print(f"FAIL qid={qid}: {exc}")
             if args.trace_jsonl:
-                append_jsonl(
-                    args.trace_jsonl,
-                    {"question_id": qid, "error": str(exc), "question_type": entry.get("question_type")},
+                error_trace = build_trace_stub(
+                    entry=entry,
+                    history_sessions=args.history_sessions,
+                    preserve_session_order=args.preserve_session_order,
+                    omit_question_date=args.omit_question_date,
+                    seed=args.seed + idx,
                 )
+                error_trace.update(
+                    {
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    }
+                )
+                append_jsonl(args.trace_jsonl, error_trace)
             progress.set_postfix(ok=ok, fail=fail, last=qid)
             if args.fail_fast:
                 raise

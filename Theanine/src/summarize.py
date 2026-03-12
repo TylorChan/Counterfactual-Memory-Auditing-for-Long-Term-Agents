@@ -33,6 +33,9 @@ class Summarizer:
         result = result.split("\n")
         for text in result:
             refined_text = self.pattern.sub("", text)
+            refined_text = refined_text.strip()
+            if not refined_text:
+                continue
             refined_summary.append(refined_text)
         return refined_summary
     

@@ -126,8 +126,7 @@ Evaluate with LongMemEval script:
 
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT/LongMemEval/src/evaluation"
-python evaluate_qa.py gpt-4o \
+python "$REPO_ROOT/LongMemEval/src/evaluation/evaluate_qa.py" gpt-4o \
   "$REPO_ROOT/LongMemEval/preds_ldagent_s_50.jsonl" \
   "$REPO_ROOT/LongMemEval/data/longmemeval_s_cleaned_50.json"
 ```
