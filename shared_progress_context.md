@@ -37,7 +37,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary (latest)
+## My laptop progress summary
 
 
 - Update time (UTC): 2026-03-06 17:33:30
@@ -64,5 +64,17 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - If THEANINE full-history is too slow, run an explicit truncated-history ablation with `--history-sessions N` and label it as such.
   - Keep ChatGPT Web automation for product-side smoke / supplementary baseline only, not main agent comparison.
 
+## MSI progress summary (latest)
 
-## MSI progress summary
+- Update time (UTC): 2026-03-12 (approx)
+- MSI is the main execution and consolidation machine for LongMemEval comparison across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.
+- Repo commands were standardized to `REPO_ROOT=\"$(git rev-parse --show-toplevel)\"` so run/eval paths stay machine-agnostic across MSI, laptop, and VM.
+- The 50-example subset `/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json` was checked to be usable for the shared benchmark and near-balanced across the 6 question types.
+- `evaluate_qa.py` now auto-loads `.env`, writes logs into `LongMemEval/eval_result/`, and is invoked with repo-root-relative paths.
+- Memory-alignment decisions used for the benchmark: MemoryOS uses `retrieval_queue_capacity=7` with `--reset-mode reinit`; LD-Agent defaults to `--no-force-flush-before-answer`; Anna uses corrected role mapping with `full_tertiary_init` off and `need-check` off by default; SHARE keeps its original memory module shape but uses the no-cap setting as the main comparison condition.
+- SHARE and LD-Agent both got `0/9` on the temporal questions in this 50-example subset. Trace analysis suggests this is mainly a memory/retrieval-structure issue rather than a simple bridge bug: SHARE often retrieves semantically related but temporally unusable memories and abstains with `I don't know`, while LD-Agent often reaches answer generation with only `0-1` related memories, which is usually not enough for multi-event temporal reasoning.
+- The temporal `0/9` result should not be overinterpreted as true accuracy `0`; the subset only contains 9 temporal questions, so the sample is small, but the failure pattern was consistent enough to indicate a real structural weakness.
+- THEANINE was integrated as an additional agent after the original 4-agent setup. Local upstream was patched to support dynamic session counts, multi-digit memory keys such as `s10-m1`, and to filter empty summary lines before embedding.
+- THEANINE full-history on MSI reached 47 successful predictions in `preds_theanine_s_50_fullhist.jsonl`; the run then failed on question 48 with OpenAI `insufficient_quota`, and a separate resume Slurm was prepared to finish the last 3 questions without overwriting the first 47 outputs.
+- MSI Git sync is currently easiest via SSH; HTTPS push failed because GitHub no longer accepts password authentication for Git operations.
+- `/users/9/chen7751/.codex/memories` is empty, so this file is the main maintained summary of MSI-side context.
