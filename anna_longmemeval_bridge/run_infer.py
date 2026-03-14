@@ -13,6 +13,12 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from tqdm import tqdm
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
+
 
 def load_env_file(candidates: Sequence[Path], override: bool = False) -> Optional[Path]:
     for path in candidates:
@@ -545,29 +551,15 @@ def answer_with_anna_style(
     if dry_run:
         return "DRY_RUN_PLACEHOLDER"
 
-    fallback_block = "\n".join(f"- {x}" for x in fallback_memories) if fallback_memories else "- (none)"
-    short_term_block = "\n".join(short_term_context) if short_term_context else "(none)"
-    long_term_block = retrieved_text if retrieved_text else "(none)"
-
-    system_prompt = (
-        "You are an assistant answering a long-term memory question. "
-        "Prioritize long-term retrieved evidence, then short-term context. "
-        "If evidence is insufficient, respond with 'I don't know.'"
-    )
-    user_prompt = (
-        f"Question:\n{query_with_date}\n\n"
-        f"Long-term Retrieval (Anna query module):\n{long_term_block}\n\n"
-        f"Fallback Retrieved Memories:\n{fallback_block}\n\n"
-        f"Short-term Context:\n{short_term_block}\n\n"
-        f"Real-time Context:\n{real_time_context}\n\n"
-        "Return only the final concise answer."
-    )
-    return llm.chat(
-        [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-    ).strip()
+    del question
+    evidence_rows: List[EvidenceRow] = []
+    if retrieved_text:
+        evidence_rows.append(EvidenceRow(text=retrieved_text, source="anna_long_term"))
+    evidence_rows.extend(EvidenceRow(text=item, source="anna_fallback") for item in fallback_memories)
+    evidence_rows.extend(EvidenceRow(text=item, source="anna_short_term") for item in short_term_context)
+    if real_time_context:
+        evidence_rows.append(EvidenceRow(text=real_time_context, source="anna_real_time"))
+    return llm.chat(build_unified_qa_messages(query_with_date, evidence_rows)).strip()
 
 
 def parse_args() -> argparse.Namespace:

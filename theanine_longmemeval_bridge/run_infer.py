@@ -11,6 +11,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from tqdm import tqdm
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
+
 SESSION_NAMES = ["first", "second", "third", "fourth", "fifth"]
 
 
@@ -298,7 +304,29 @@ def run_theanine_for_entry(
 
     answer_key = f"s{qa_session_num}-t1"
     answer_payload = result_dict.get(answer_key, {})
-    hypothesis = (answer_payload.get("response") or "").strip()
+    query = entry["question"].strip()
+    if not omit_question_date:
+        query = f"Current date: {entry['question_date']}\n\n{query}"
+    evidence_rows: List[EvidenceRow] = []
+    for item in answer_payload.get("after_refinement") or []:
+        text = " ".join(str(item).split()).strip()
+        if text:
+            evidence_rows.append(EvidenceRow(text=text, source="theanine_refined_memory"))
+    if not evidence_rows:
+        for item in answer_payload.get("before_refinement") or []:
+            text = " ".join(str(item).split()).strip()
+            if text:
+                evidence_rows.append(EvidenceRow(text=text, source="theanine_raw_memory"))
+    from langchain_openai import ChatOpenAI
+
+    qa_llm = ChatOpenAI(
+        temperature=0.0,
+        max_tokens=256,
+        model_name=llm_model,
+        api_key=os.environ.get("OPENAI_API_KEY"),
+    )
+    response = qa_llm.invoke(build_unified_qa_messages(query, evidence_rows))
+    hypothesis = (response.content or "").strip()
     trace.update(
         {
             "total_cost": total_cost,
