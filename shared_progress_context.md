@@ -34,34 +34,20 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary
+## My laptop progress summary (latest)
 
+- Update time (UTC): 2026-03-14 15:05:12
+- MacBook work shifted from ChatGPT-Web/THEANINE exploration to fairness control for the LongMemEval agent comparison.
+- Added a shared unified factual QA head in `longmemeval_unified_answer.py` and rewired all 5 bridges (`Anna`, `SHARE`, `LD-Agent`, `MemoryOS`, `THEANINE`) to use the same final answer prompt while leaving each agent’s native memory write/retrieve pipeline unchanged.
+- This design decision was explicit: normalize only the final answer head first, and do **not** repair temporal reasoning yet, so later counterfactual results reflect memory/retrieval behavior rather than dialogue-style prompt mismatch.
+- Local inspection of bridge code and existing trace files found baseline `retrieval-correct but influence-wrong` cases before any counterfactual intervention; two concrete examples discussed were `SHARE` question `c8c3f81d` (`Nike` evidence present but model abstains) and `MemoryOS` question `852ce960` (correct `$400,000` memory present but stale `$350,000` memory dominates).
+- The 5 modified bridges plus the shared prompt helper passed `py_compile`; dry-run smoke checks succeeded for the patched `MemoryOS` and `THEANINE` bridges.
+- For MSI execution, a new Slurm array script `run_agents_array_unifiedqa.slurm` was created and shell-validated. It now runs the unified-QA baselines as 9 tasks: `THEANINE`, `SHARE`, `MemoryOS`, and `LD-Agent` are split into two 25-question shards each, while `Anna` stays whole.
+- The Slurm array is configured as `0-8%6`, ordered longest-first to reduce makespan, and output filenames now carry a default `MM_DD` suffix plus shard tag (for example `..._03_14_p1.jsonl`) so new baseline files do not collide with older outputs.
+- The MSI launch plan now assumes six OpenAI keys/projects are available via `.env`: `OPENAI_API_KEY`, `OPENAI_API_KEY_1`, `...`, `OPENAI_API_KEY_5`, with the first 6 concurrent shards mapped one-to-one to distinct keys.
+- Next expected machine handoff: upload the updated code to MSI, run the new unified-QA baseline array there, then use those new baseline traces/results as the reference point before implementing the counterfactual replay wrapper.
 
-- Update time (UTC): 2026-03-06 17:33:30
-- High-level progress: MacBook-side automation and THEANINE integration both advanced materially; ChatGPT Web project automation is now working end-to-end for smoke cases, and THEANINE bridge now supports full-history LongMemEval adaptation.
-- Completed:
-  - Built `/Users/daqingchen/csci8980/chatgpt_web_eval` Playwright automation for ChatGPT Web using an existing Chrome CDP session.
-  - Verified project creation flow on ChatGPT Web: expand `Projects` -> `New project` -> set `Project-only` memory -> reopen project settings -> write instructions -> click `Save`.
-  - Added single-question runner and batch runner with tqdm-like progress formatting under `/Users/daqingchen/csci8980/chatgpt_web_eval`.
-  - Updated ChatGPT Web protocol so each session starts with `For this conversation only, assume the current date is <session_date>. Use this date when answering in this chat.`
-  - Updated project instructions to constrain verbosity globally for both replay chats and final QA.
-  - Forked / cloned `/Users/daqingchen/csci8980/Theanine` and built `/Users/daqingchen/csci8980/theanine_longmemeval_bridge`.
-  - Patched local THEANINE upstream to support dynamic session counts instead of the original fixed `4 history + 1 current` design.
-  - Patched local THEANINE memory-key parsing to support multi-digit session ids such as `s10-m1`.
-  - Verified full-history dry-run for THEANINE: first question `gpt4_9a159967` now uses `46` history sessions plus QA session `47` in `/Users/daqingchen/csci8980/LongMemEval/preds_theanine_s_50_fullhist_dryrun.trace.jsonl`.
-- In progress:
-  - Real full-history THEANINE smoke run in `theanine-lme` environment is running / being validated for runtime viability.
-  - ChatGPT Web batch automation exists, but full 50-question product run is not practically viable under ChatGPT message caps.
-- Blockers / risks:
-  - ChatGPT Plus product-side `GPT-5.3 Instant` message limits are a hard bottleneck for full 50-question LongMemEval replay; exact count computation showed every question in `longmemeval_s_cleaned_50.json` exceeds the 160 messages / 3h cap under the current replay protocol.
-  - ChatGPT Web product baseline is therefore suitable only for smoke / small-sample product evaluation, not full 50-question main-table evaluation.
-  - THEANINE full-history adaptation is now code-complete locally, but runtime cost may be very high because graph construction now scales over all history sessions per question.
-- Next steps:
-  - Let the THEANINE full-history smoke finish, then decide whether full 50-question execution is tractable on available budget/time.
-  - If THEANINE full-history is too slow, run an explicit truncated-history ablation with `--history-sessions N` and label it as such.
-  - Keep ChatGPT Web automation for product-side smoke / supplementary baseline only, not main agent comparison.
-
-## MSI progress summary (latest)
+## MSI progress summary
 
 - Update time (UTC): 2026-03-12 (approx)
 - MSI is the main execution and consolidation machine for LongMemEval comparison across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.

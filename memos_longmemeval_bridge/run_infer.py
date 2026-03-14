@@ -14,6 +14,12 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from tqdm import tqdm
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
+
 
 def load_env_file(candidates: List[Path]) -> Optional[Path]:
     """
@@ -363,6 +369,73 @@ def replay_sessions_into_memory(memo, entry: Dict, preserve_session_order: bool)
     return n_pairs
 
 
+def build_memoryos_evidence_rows(retrieval: Dict) -> List[EvidenceRow]:
+    rows: List[EvidenceRow] = []
+    for page in retrieval.get("retrieved_pages", []):
+        text_parts = []
+        meta_info = (page.get("meta_info") or "").strip()
+        user_input = (page.get("user_input") or "").strip()
+        agent_response = (page.get("agent_response") or "").strip()
+        if meta_info:
+            text_parts.append(meta_info)
+        if user_input:
+            text_parts.append(f"User: {user_input}")
+        if agent_response:
+            text_parts.append(f"Assistant: {agent_response}")
+        text = "\n".join(text_parts).strip()
+        if text:
+            rows.append(
+                EvidenceRow(
+                    text=text,
+                    source="memoryos_page",
+                    timestamp=page.get("timestamp"),
+                )
+            )
+    for item in retrieval.get("retrieved_user_knowledge", []):
+        knowledge = (item.get("knowledge") or "").strip()
+        if knowledge:
+            rows.append(
+                EvidenceRow(
+                    text=knowledge,
+                    source="memoryos_user_knowledge",
+                    timestamp=item.get("timestamp"),
+                )
+            )
+    for item in retrieval.get("retrieved_assistant_knowledge", []):
+        knowledge = (item.get("knowledge") or "").strip()
+        if knowledge:
+            rows.append(
+                EvidenceRow(
+                    text=knowledge,
+                    source="memoryos_assistant_knowledge",
+                    timestamp=item.get("timestamp"),
+                )
+            )
+    return rows
+
+
+def build_short_term_rows(memo) -> List[EvidenceRow]:
+    rows: List[EvidenceRow] = []
+    for qa in memo.short_term_memory.get_all():
+        user_input = (qa.get("user_input") or "").strip()
+        agent_response = (qa.get("agent_response") or "").strip()
+        text_parts = []
+        if user_input:
+            text_parts.append(f"User: {user_input}")
+        if agent_response:
+            text_parts.append(f"Assistant: {agent_response}")
+        text = "\n".join(text_parts).strip()
+        if text:
+            rows.append(
+                EvidenceRow(
+                    text=text,
+                    source="memoryos_short_term",
+                    timestamp=qa.get("timestamp"),
+                )
+            )
+    return rows
+
+
 def main() -> None:
     args = parse_args()
     silence_memoryos_logs = not args.verbose_memoryos
@@ -439,7 +512,19 @@ def main() -> None:
                             query = entry["question"]
                             if not args.omit_question_date and entry.get("question_date"):
                                 query = f"Current date: {entry['question_date']}\n\n{entry['question']}"
-                            hypothesis = memo.get_response(query=query).strip()
+                            retrieval = memo.retriever.retrieve_context(
+                                user_query=query,
+                                user_id=memo.user_id,
+                            )
+                            evidence_rows = build_short_term_rows(memo) + build_memoryos_evidence_rows(
+                                retrieval
+                            )
+                            hypothesis = memo.client.chat_completion(
+                                model=args.llm_model,
+                                messages=build_unified_qa_messages(query, evidence_rows),
+                                temperature=0.0,
+                                max_tokens=args.response_max_tokens or 256,
+                            ).strip()
 
                     pred_obj = {"question_id": qid, "hypothesis": hypothesis}
                     pred_f.write(json.dumps(pred_obj, ensure_ascii=False) + "\n")
@@ -447,13 +532,16 @@ def main() -> None:
 
                     if trace_f is not None:
                         retrieval = {}
+                        short_term_rows = []
                         if not args.dry_run:
                             retrieval = memo._bridge_state.get("last_retrieval") or {}
+                            short_term_rows = build_short_term_rows(memo)
                         trace_obj = {
                             "question_id": qid,
                             "question_type": qtype,
                             "reset_mode": args.reset_mode,
                             "n_ingested_pairs": n_pairs,
+                            "n_short_term_items": len(short_term_rows),
                             "n_retrieved_pages": len(retrieval.get("retrieved_pages", [])),
                             "n_retrieved_user_knowledge": len(
                                 retrieval.get("retrieved_user_knowledge", [])
@@ -461,6 +549,14 @@ def main() -> None:
                             "n_retrieved_assistant_knowledge": len(
                                 retrieval.get("retrieved_assistant_knowledge", [])
                             ),
+                            "short_term_history": [
+                                {
+                                    "text": row.text,
+                                    "timestamp": row.timestamp,
+                                    "source": row.source,
+                                }
+                                for row in short_term_rows
+                            ],
                             "retrieved_pages": retrieval.get("retrieved_pages", []),
                             "retrieved_user_knowledge": retrieval.get(
                                 "retrieved_user_knowledge", []

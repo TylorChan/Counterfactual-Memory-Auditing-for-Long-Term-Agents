@@ -13,6 +13,7 @@ __pycache__/
 *.pyc
 
 # LongMemEval predictions / traces / eval artifacts
+LongMemEval/data/longmemeval_s_cleaned.json
 LongMemEval/preds_*.jsonl
 LongMemEval/*.trace.jsonl
 LongMemEval/*.jsonl.eval-results-*
@@ -25,6 +26,7 @@ chatgpt_project_eval/traces/
 chatgpt_web_eval/traces/
 
 # Local browser state for ChatGPT Web automation
+chatgpt_web_eval/
 chatgpt_web_eval/browser_profile/
 chatgpt_web_eval/chrome_cdp_profile/
 
@@ -37,3 +39,6 @@ tmp_share/
 
 # THEANINE generated bridge episodes
 Theanine/resources/data/bridge_*.json
+
+# Results copied from MSI machine. 
+results/

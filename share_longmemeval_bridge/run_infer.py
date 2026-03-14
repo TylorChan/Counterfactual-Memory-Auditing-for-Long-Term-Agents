@@ -13,6 +13,12 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from tqdm import tqdm
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
+
 
 @dataclass
 class ShareMemory:
@@ -539,31 +545,9 @@ def answer_question(
     if dry_run:
         return "DRY_RUN_PLACEHOLDER"
 
-    memory_block = "\n".join(f"- {item}" for item in selected_memories) if selected_memories else "- (none)"
-    if force_abstain_when_uncertain:
-        system_prompt = (
-            "You are a helpful assistant answering long-term memory questions. "
-            "Use provided memory evidence first. If evidence is insufficient, reply 'I don't know.'"
-        )
-    else:
-        system_prompt = (
-            "You are a helpful assistant answering long-term memory questions. "
-            "Use memory evidence first, then recent dialogue. "
-            "Give the best concise factual answer. "
-            "Only reply 'I don't know.' when there is truly no usable evidence."
-        )
-    user_prompt = (
-        f"Question:\n{query_with_date}\n\n"
-        f"Selected Memory Evidence:\n{memory_block}\n\n"
-        f"Recent Dialogue Snippet:\n{recent_dialogue}\n\n"
-        "Return only the final short answer."
-    )
-    return llm.chat_text(
-        [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-    ).strip()
+    del question, recent_dialogue, force_abstain_when_uncertain
+    evidence_rows = [EvidenceRow(text=item, source="selected") for item in selected_memories]
+    return llm.chat_text(build_unified_qa_messages(query_with_date, evidence_rows)).strip()
 
 
 def call_prompt_text(llm: OpenAIJsonClient, prompt: str, retries: int = 2) -> str:

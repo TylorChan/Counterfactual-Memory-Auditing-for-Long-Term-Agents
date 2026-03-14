@@ -1,0 +1,58 @@
+{
+  "app_name": "ChatGPT",
+  "click_pause_seconds": 0.35,
+  "post_paste_pause_seconds": 0.2,
+  "stability_timeout_seconds": 120.0,
+  "stability_required_seconds": 2.5,
+  "stability_poll_seconds": 0.6,
+  "create_project_button": {
+    "x": 110,
+    "y": 180
+  },
+  "project_name_input": {
+    "x": 244,
+    "y": 251
+  },
+  "more_options_button": {
+    "x": 247,
+    "y": 474
+  },
+  "project_only_option": {
+    "x": 181,
+    "y": 283
+  },
+  "project_settings_done_button": {
+    "x": 458,
+    "y": 432
+  },
+  "project_create_confirm_button": {
+    "x": 246,
+    "y": 407
+  },
+  "project_title_anchor": {
+    "x": 1207,
+    "y": 99
+  },
+  "project_home_button": {
+    "x": 177,
+    "y": 120
+  },
+  "project_home_composer_input": {
+    "x": 869,
+    "y": 872
+  },
+  "composer_input": {
+    "x": 869,
+    "y": 872
+  },
+  "copy_last_response_button": {
+    "x": 1164,
+    "y": 805
+  },
+  "stability_region": {
+    "x": 534,
+    "y": 184,
+    "width": 744,
+    "height": 700
+  }
+}

@@ -14,6 +14,12 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from tqdm import tqdm
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
+
 
 @dataclass
 class RetrievalSnapshot:
@@ -226,6 +232,21 @@ class OpenAIEmployClient:
             self.token_usage["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
             self.token_usage["total"] += int(getattr(usage, "total_tokens", 0) or 0)
 
+        message = response.choices[0].message.content
+        return (message or "").strip()
+
+    def chat(self, messages: List[Dict]) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.token_usage["prompt"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+            self.token_usage["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
+            self.token_usage["total"] += int(getattr(usage, "total_tokens", 0) or 0)
         message = response.choices[0].message.content
         return (message or "").strip()
 
@@ -519,18 +540,31 @@ def answer_question(
         datatype="text",
     )
 
-    context_blob = summarize_context(context_memories, ld_args.usr_name, query_text)
-    memory_blob = summarize_related_memories(related_memories, question_ts)
-    user_traits = trim_traits(personas.user_traits, args.max_user_personas)
-    agent_traits = trim_traits(personas.agent_traits, args.max_agent_personas)
+    del generator, personas, ld_args
 
-    hypothesis = generator.response_build(
-        query_text,
-        context_blob,
-        memory_blob,
-        user_traits,
-        agent_traits,
-    ).strip()
+    evidence_rows: List[EvidenceRow] = []
+    for item in context_memories:
+        dialog = (item.get("dialog") or "").strip()
+        if dialog:
+            evidence_rows.append(
+                EvidenceRow(
+                    text=dialog,
+                    source="ld_context",
+                    timestamp=item.get("time"),
+                )
+            )
+    for item in related_memories:
+        summary = (item.get("summary") or item.get("dialog") or "").strip()
+        if summary:
+            evidence_rows.append(
+                EvidenceRow(
+                    text=summary,
+                    source="ld_related",
+                    timestamp=item.get("time"),
+                )
+            )
+
+    hypothesis = event_memory.LLMclient.chat(build_unified_qa_messages(query_text, evidence_rows)).strip()
 
     return hypothesis, RetrievalSnapshot(context_memories, related_memories), query_text
 
