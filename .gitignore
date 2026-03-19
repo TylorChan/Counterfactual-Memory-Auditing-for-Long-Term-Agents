@@ -42,3 +42,11 @@ Theanine/resources/data/bridge_*.json
 
 # Results copied from MSI machine. 
 results/
+  cf_only_runtime/
+  Theanine_p1_repo/
+  Theanine_p2_repo/
+  memos_longmemeval_bridge/runtime_storage/
+  LongMemEval/merged/
+  logs/
+  EOF
+
