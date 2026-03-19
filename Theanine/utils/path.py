@@ -5,6 +5,9 @@ from pathlib import Path
 
 
 def get_project_path():
+    env_path = os.environ.get("THEANINE_PROJECT_PATH")
+    if env_path:
+        return Path(env_path)
     return Path(__file__).parents[1]
 
 
@@ -71,7 +74,6 @@ def load_memory(memory_name: str):
     with open(memory_path, 'r') as f:
         memory = json.load(f)
     return memory
-
 
 
 

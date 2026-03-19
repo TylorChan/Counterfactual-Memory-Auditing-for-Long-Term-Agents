@@ -1,0 +1,7 @@
+Accuracy: 0.2
+        single-session-preference: 0.125 (8)
+        temporal-reasoning: 0.1111 (9)
+        knowledge-update: 0.25 (8)
+        single-session-user: 0.625 (8)
+        multi-session: 0.1111 (9)
+        single-session-assistant: 0.0 (8)

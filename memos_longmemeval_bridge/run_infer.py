@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import time
+import tempfile
 from collections import defaultdict, deque
 from contextlib import contextmanager, redirect_stdout
 from datetime import datetime
@@ -18,6 +19,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from longmemeval_audit import (
+    append_jsonl as append_audit_jsonl,
+    build_query_record,
+    build_write_record,
+    derive_audit_paths,
+    make_write_id,
+)
+from longmemeval_counterfactual import (
+    add_cf_args,
+    append_cf_outputs,
+    build_cf_specs,
+    derive_cf_paths,
+    parse_dt,
+    summarize_replay_cf,
+)
 from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
 
 
@@ -162,6 +178,7 @@ def parse_args() -> argparse.Namespace:
             "'manual' reuses one instance and clears internal state."
         ),
     )
+    add_cf_args(parser)
     return parser.parse_args()
 
 
@@ -230,6 +247,48 @@ def normalize_timestamp(raw: str) -> str:
     if dt is not None:
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     return "1970-01-01 00:00:00"
+
+
+def sanitize_path_fragment(raw: str) -> str:
+    clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw or "")
+    clean = clean.strip("._")
+    return clean or "sample"
+
+
+def normalize_text_key(raw: object) -> str:
+    return re.sub(r"\s+", " ", str(raw or "")).strip().lower()
+
+
+def record_memoryos_pending_knowledge_lineage(memo, bridge_state: Dict, bucket_name: str, knowledge_text: str) -> None:
+    norm_text = normalize_text_key(knowledge_text)
+    if not norm_text:
+        return
+    event_map = bridge_state.get("event_map") or {}
+    write_ids: List[str] = []
+    for session in getattr(memo.mid_term_memory, "sessions", {}).values():
+        for page in session.get("details", []) or []:
+            if page.get("analyzed"):
+                continue
+            key = (
+                (page.get("user_input") or "").strip(),
+                (page.get("agent_response") or "").strip(),
+                str(page.get("timestamp") or ""),
+            )
+            write_id = event_map.get(key)
+            if write_id and write_id not in write_ids:
+                write_ids.append(write_id)
+    current_event = bridge_state.get("current_event")
+    if not write_ids and isinstance(current_event, dict):
+        current_write_id = current_event.get("write_id")
+        if current_write_id:
+            write_ids.append(current_write_id)
+    if not write_ids:
+        return
+    bucket = bridge_state.setdefault("knowledge_lineage_map", {}).setdefault(bucket_name, {})
+    existing = bucket.setdefault(norm_text, [])
+    for write_id in write_ids:
+        if write_id not in existing:
+            existing.append(write_id)
 
 
 @contextmanager
@@ -331,6 +390,32 @@ def build_memoryos(
 
     memo.retriever.retrieve_context = wrapped_retrieve_context
 
+    original_add_user_knowledge = memo.user_long_term_memory.add_user_knowledge
+
+    def wrapped_add_user_knowledge(knowledge_text):
+        record_memoryos_pending_knowledge_lineage(
+            memo,
+            bridge_state,
+            "retrieved_user_knowledge",
+            knowledge_text,
+        )
+        return original_add_user_knowledge(knowledge_text)
+
+    memo.user_long_term_memory.add_user_knowledge = wrapped_add_user_knowledge
+
+    original_add_assistant_knowledge = memo.assistant_long_term_memory.add_assistant_knowledge
+
+    def wrapped_add_assistant_knowledge(knowledge_text):
+        record_memoryos_pending_knowledge_lineage(
+            memo,
+            bridge_state,
+            "retrieved_assistant_knowledge",
+            knowledge_text,
+        )
+        return original_add_assistant_knowledge(knowledge_text)
+
+    memo.assistant_long_term_memory.add_assistant_knowledge = wrapped_add_assistant_knowledge
+
     if args.response_temperature is not None or args.response_max_tokens is not None:
         original_chat_completion = memo.client.chat_completion
 
@@ -366,6 +451,80 @@ def replay_sessions_into_memory(memo, entry: Dict, preserve_session_order: bool)
                 timestamp=normalized_session_ts,
             )
             n_pairs += 1
+    return n_pairs
+
+
+def collect_memoryos_write_events(entry: Dict, preserve_session_order: bool) -> List[Dict]:
+    events: List[Dict] = []
+    pair_index = 0
+    for session_idx, (session_date, session_turns) in enumerate(
+        get_ordered_sessions(entry, preserve_session_order),
+        start=1,
+    ):
+        normalized_session_ts = normalize_timestamp(session_date)
+        for user_input, agent_response in iter_qa_pairs(session_turns):
+            pair_index += 1
+            write_id = make_write_id(
+                agent="memoryos",
+                question_id=entry["question_id"],
+                write_type="memoryos_qa_pair",
+                content=f"User: {user_input}\nAssistant: {agent_response}",
+                session_id=f"s{session_idx}",
+                turn_span=[pair_index],
+                timestamp=normalized_session_ts,
+            )
+            events.append(
+                {
+                    "write_id": write_id,
+                    "session_id": f"s{session_idx}",
+                    "turn_span": [pair_index],
+                    "timestamp": normalized_session_ts,
+                    "user_input": user_input,
+                    "agent_response": agent_response,
+                    "original_index": pair_index - 1,
+                }
+            )
+    return events
+
+
+def sort_memoryos_events(events: Iterable[Dict]) -> List[Dict]:
+    def sort_key(event: Dict):
+        dt = parse_dt(event.get("timestamp"))
+        if dt is None:
+            return (1, str(event.get("timestamp") or ""), int(event.get("original_index", 0)))
+        return (0, dt, int(event.get("original_index", 0)))
+
+    return sorted(list(events), key=sort_key)
+
+
+def apply_memoryos_cf_spec(events: Iterable[Dict], spec) -> Tuple[List[Dict], Optional[str]]:
+    mutated: List[Dict] = []
+    target_timestamp: Optional[str] = None
+    for event in events:
+        if event["write_id"] != spec.target_write_id:
+            mutated.append(dict(event))
+            continue
+        if spec.cf_type == "rollback":
+            target_timestamp = event.get("timestamp")
+            continue
+        updated = dict(event)
+        updated["timestamp"] = spec.new_timestamp or event.get("timestamp")
+        target_timestamp = updated["timestamp"]
+        mutated.append(updated)
+    return sort_memoryos_events(mutated), target_timestamp
+
+
+def replay_pair_events_into_memory(memo, events: Iterable[Dict]) -> int:
+    n_pairs = 0
+    for event in sort_memoryos_events(events):
+        memo._bridge_state["current_event"] = event
+        memo.add_memory(
+            user_input=event["user_input"],
+            agent_response=event["agent_response"],
+            timestamp=event["timestamp"],
+        )
+        n_pairs += 1
+    memo._bridge_state["current_event"] = None
     return n_pairs
 
 
@@ -436,6 +595,256 @@ def build_short_term_rows(memo) -> List[EvidenceRow]:
     return rows
 
 
+def build_memoryos_write_record(
+    qid: str,
+    text: str,
+    write_type: str,
+    write_order: int,
+    timestamp: Optional[object],
+    session_id: Optional[str],
+    turn_span: Optional[List[object]],
+) -> Tuple[Optional[Dict], Optional[Dict]]:
+    clean = (text or "").strip()
+    if not clean:
+        return None, None
+    write_id = make_write_id(
+        agent="memoryos",
+        question_id=qid,
+        write_type=write_type,
+        content=clean,
+        session_id=session_id,
+        turn_span=turn_span,
+        timestamp=timestamp,
+    )
+    write_record = build_write_record(
+        agent="memoryos",
+        question_id=qid,
+        write_id=write_id,
+        write_order=write_order,
+        write_type=write_type,
+        stage="answer_memory_state",
+        timestamp=timestamp,
+        session_id=session_id,
+        turn_span=turn_span,
+        content_text=clean,
+        lineage_source_ids=[session_id] if session_id else [],
+        audit_eligible=True,
+        origin="native_memory",
+    )
+    item_record = {
+        "write_id": write_id,
+        "stage": "answer_memory_state",
+        "rank": write_order,
+        "score": None,
+        "timestamp": None if timestamp is None else str(timestamp),
+        "write_type": write_type,
+        "audit_eligible": True,
+    }
+    return write_record, item_record
+
+
+def build_memoryos_event_write_records(qid: str, events: Iterable[Dict]) -> List[Dict]:
+    write_records: List[Dict] = []
+    for write_order, event in enumerate(sort_memoryos_events(events), start=1):
+        write_records.append(
+            build_write_record(
+                agent="memoryos",
+                question_id=qid,
+                write_id=event["write_id"],
+                write_order=write_order,
+                write_type="memoryos_qa_pair",
+                stage="write_ingress",
+                timestamp=event.get("timestamp"),
+                session_id=event.get("session_id"),
+                turn_span=event.get("turn_span"),
+                content_text=f"User: {event['user_input']}\nAssistant: {event['agent_response']}",
+                lineage_source_ids=[event.get("session_id")] if event.get("session_id") else [],
+                audit_eligible=True,
+                origin="native_memory",
+            )
+        )
+    return write_records
+
+
+def _memoryos_event_map(events: Iterable[Dict]) -> Dict[Tuple[str, str, str], str]:
+    mapping: Dict[Tuple[str, str, str], str] = {}
+    for event in sort_memoryos_events(events):
+        key = (
+            (event.get("user_input") or "").strip(),
+            (event.get("agent_response") or "").strip(),
+            str(event.get("timestamp") or ""),
+        )
+        mapping.setdefault(key, event["write_id"])
+    return mapping
+
+
+def run_memoryos_replay(
+    *,
+    entry: Dict,
+    events: List[Dict],
+    args: argparse.Namespace,
+    sample_storage_root: Path,
+    sample_tag: str,
+    silence_memoryos_logs: bool,
+) -> Dict:
+    qid = entry["question_id"]
+    qtype = entry.get("question_type", "unknown")
+    event_map = _memoryos_event_map(events)
+    with maybe_silence_stdout(silence_memoryos_logs):
+        sample_storage = Path(
+            tempfile.mkdtemp(
+                prefix=f"{sample_tag}_{sanitize_path_fragment(qid)}_",
+                dir=str(sample_storage_root),
+            )
+        )
+        memo = build_memoryos(
+            args=args,
+            runtime_storage=sample_storage,
+            user_id="longmemeval_bridge_user",
+            assistant_id="longmemeval_bridge_assistant",
+        )
+        memo._bridge_state["last_retrieval"] = None
+        memo._bridge_state["event_map"] = event_map
+        n_pairs = replay_pair_events_into_memory(memo, events)
+        query = entry["question"]
+        if not args.omit_question_date and entry.get("question_date"):
+            query = f"Current date: {entry['question_date']}\n\n{entry['question']}"
+        retrieval = memo.retriever.retrieve_context(
+            user_query=query,
+            user_id=memo.user_id,
+        )
+        short_term_rows = build_short_term_rows(memo)
+        evidence_rows = short_term_rows + build_memoryos_evidence_rows(retrieval)
+        hypothesis = memo.client.chat_completion(
+            model=args.llm_model,
+            messages=build_unified_qa_messages(query, evidence_rows),
+            temperature=0.0,
+            max_tokens=args.response_max_tokens or 256,
+        ).strip()
+
+    event_records = build_memoryos_event_write_records(qid, events)
+    candidate_write_ids = [record["write_id"] for record in event_records]
+    write_timestamp_by_id = {record["write_id"]: record["timestamp"] for record in event_records}
+    retrieved_write_ids: List[str] = []
+    prompt_write_ids: List[str] = []
+    prompt_items: List[Dict] = []
+    retrieved_items: List[Dict] = []
+    bridge_items: List[Dict] = []
+    seen_ids = set()
+
+    def add_mapped_item(write_id: str, stage: str, timestamp: Optional[str]) -> None:
+        if write_id in seen_ids:
+            return
+        seen_ids.add(write_id)
+        item_record = {
+            "write_id": write_id,
+            "stage": stage,
+            "rank": len(prompt_items) + 1,
+            "score": None,
+            "timestamp": None if timestamp is None else str(timestamp),
+            "write_type": "memoryos_qa_pair",
+            "audit_eligible": True,
+        }
+        prompt_write_ids.append(write_id)
+        prompt_items.append(dict(item_record))
+        if stage != "short_term_prompt":
+            retrieved_write_ids.append(write_id)
+            retrieved_items.append(dict(item_record))
+
+    for qa in memo.short_term_memory.get_all():
+        key = (
+            (qa.get("user_input") or "").strip(),
+            (qa.get("agent_response") or "").strip(),
+            str(qa.get("timestamp") or ""),
+        )
+        write_id = event_map.get(key)
+        if write_id:
+            add_mapped_item(write_id, "short_term_prompt", qa.get("timestamp"))
+
+    for page in retrieval.get("retrieved_pages", []):
+        key = (
+            (page.get("user_input") or "").strip(),
+            (page.get("agent_response") or "").strip(),
+            str(page.get("timestamp") or ""),
+        )
+        write_id = event_map.get(key)
+        if write_id:
+            add_mapped_item(write_id, "retrieved_page", page.get("timestamp"))
+        else:
+            bridge_items.append(
+                {
+                    "text": f"{page.get('user_input', '')} {page.get('agent_response', '')}",
+                    "source": "memoryos_page_unmapped",
+                    "audit_eligible": False,
+                }
+            )
+
+    for bucket_name in ("retrieved_user_knowledge", "retrieved_assistant_knowledge"):
+        for item in retrieval.get(bucket_name, []):
+            knowledge_text = (item.get("knowledge") or "").strip()
+            matched_ids = (
+                memo._bridge_state.get("knowledge_lineage_map", {})
+                .get(bucket_name, {})
+                .get(normalize_text_key(knowledge_text), [])
+            )
+            if matched_ids:
+                for write_id in matched_ids:
+                    add_mapped_item(
+                        write_id,
+                        bucket_name,
+                        write_timestamp_by_id.get(write_id),
+                    )
+            else:
+                bridge_items.append(
+                    {
+                        "text": knowledge_text,
+                        "source": bucket_name,
+                        "audit_eligible": False,
+                    }
+                )
+
+    query_record = build_query_record(
+        agent="memoryos",
+        question_id=qid,
+        question_type=qtype,
+        query_time=entry.get("question_date"),
+        question_date_used=entry.get("question_date"),
+        baseline_answer=hypothesis,
+        candidate_write_ids=candidate_write_ids,
+        retrieved_write_ids=retrieved_write_ids,
+        selected_write_ids=prompt_write_ids,
+        prompt_write_ids=prompt_write_ids,
+        retrieved_items=retrieved_items,
+        prompt_items=prompt_items,
+        bridge_items=bridge_items,
+        extra={
+            "query_used": query,
+            "reset_mode": args.reset_mode,
+        },
+    )
+    trace_obj = {
+        "question_id": qid,
+        "question_type": qtype,
+        "reset_mode": args.reset_mode,
+        "n_ingested_pairs": n_pairs,
+        "n_short_term_items": len(short_term_rows),
+        "n_retrieved_pages": len(retrieval.get("retrieved_pages", [])),
+        "n_retrieved_user_knowledge": len(retrieval.get("retrieved_user_knowledge", [])),
+        "n_retrieved_assistant_knowledge": len(retrieval.get("retrieved_assistant_knowledge", [])),
+        "short_term_history": [{"text": row.text, "timestamp": row.timestamp, "source": row.source} for row in short_term_rows],
+        "retrieved_pages": retrieval.get("retrieved_pages", []),
+        "retrieved_user_knowledge": retrieval.get("retrieved_user_knowledge", []),
+        "retrieved_assistant_knowledge": retrieval.get("retrieved_assistant_knowledge", []),
+    }
+    return {
+        "hypothesis": hypothesis,
+        "trace": trace_obj,
+        "query_record": query_record,
+        "write_records": event_records,
+        "events": sort_memoryos_events(events),
+    }
+
+
 def main() -> None:
     args = parse_args()
     silence_memoryos_logs = not args.verbose_memoryos
@@ -453,6 +862,14 @@ def main() -> None:
     args.out_jsonl.parent.mkdir(parents=True, exist_ok=True)
     if args.trace_jsonl:
         args.trace_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    audit_query_path, audit_write_path = derive_audit_paths(args.trace_jsonl)
+    cf_run_path, cf_query_path = derive_cf_paths(args.trace_jsonl)
+    for path in (audit_query_path, audit_write_path, cf_run_path, cf_query_path):
+        if path is not None and path.exists():
+            path.unlink()
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
 
     dataset = load_longmemeval(args.longmemeval_file)
     if args.offset:
@@ -463,6 +880,7 @@ def main() -> None:
     print(f"Loaded {len(dataset)} samples from {args.longmemeval_file}")
     memo = None
     per_sample_storage = args.runtime_storage / "per_sample_reinit"
+    per_sample_storage.mkdir(parents=True, exist_ok=True)
     if not args.dry_run and args.reset_mode == "manual":
         with maybe_silence_stdout(silence_memoryos_logs):
             memo = build_memoryos(args)
@@ -494,12 +912,15 @@ def main() -> None:
                     else:
                         with maybe_silence_stdout(silence_memoryos_logs):
                             if args.reset_mode == "reinit":
-                                if per_sample_storage.exists():
-                                    shutil.rmtree(per_sample_storage)
-                                per_sample_storage.mkdir(parents=True, exist_ok=True)
+                                sample_storage = Path(
+                                    tempfile.mkdtemp(
+                                        prefix=f"{i:03d}_{sanitize_path_fragment(qid)}_",
+                                        dir=str(per_sample_storage),
+                                    )
+                                )
                                 memo = build_memoryos(
                                     args=args,
-                                    runtime_storage=per_sample_storage,
+                                    runtime_storage=sample_storage,
                                     user_id="longmemeval_bridge_user",
                                     assistant_id="longmemeval_bridge_assistant",
                                 )
@@ -567,6 +988,170 @@ def main() -> None:
                         }
                         trace_f.write(json.dumps(trace_obj, ensure_ascii=False) + "\n")
                         trace_f.flush()
+
+                    write_records: List[Dict] = []
+                    candidate_write_ids: List[str] = []
+                    retrieved_write_ids: List[str] = []
+                    selected_write_ids: List[str] = []
+                    prompt_write_ids: List[str] = []
+                    retrieved_items: List[Dict] = []
+                    prompt_items: List[Dict] = []
+                    bridge_items: List[Dict] = []
+                    write_order = 0
+
+                    if not args.dry_run:
+                        for qa in memo.short_term_memory.get_all():
+                            text_parts = []
+                            user_input = (qa.get("user_input") or "").strip()
+                            agent_response = (qa.get("agent_response") or "").strip()
+                            if user_input:
+                                text_parts.append(f"User: {user_input}")
+                            if agent_response:
+                                text_parts.append(f"Assistant: {agent_response}")
+                            write_order += 1
+                            write_record, item_record = build_memoryos_write_record(
+                                qid=qid,
+                                text="\n".join(text_parts),
+                                write_type="memoryos_short_term",
+                                write_order=write_order,
+                                timestamp=qa.get("timestamp"),
+                                session_id=f"short_term:{write_order}",
+                                turn_span=[write_order],
+                            )
+                            if write_record and item_record:
+                                write_records.append(write_record)
+                                candidate_write_ids.append(write_record["write_id"])
+                                prompt_write_ids.append(write_record["write_id"])
+                                selected_write_ids.append(write_record["write_id"])
+                                prompt_items.append(dict(item_record))
+
+                        for page in retrieval.get("retrieved_pages", []):
+                            text_parts = []
+                            if (page.get("meta_info") or "").strip():
+                                text_parts.append(page["meta_info"].strip())
+                            if (page.get("user_input") or "").strip():
+                                text_parts.append(f"User: {page['user_input'].strip()}")
+                            if (page.get("agent_response") or "").strip():
+                                text_parts.append(f"Assistant: {page['agent_response'].strip()}")
+                            write_order += 1
+                            write_record, item_record = build_memoryos_write_record(
+                                qid=qid,
+                                text="\n".join(text_parts),
+                                write_type="memoryos_page",
+                                write_order=write_order,
+                                timestamp=page.get("timestamp"),
+                                session_id=f"page:{page.get('memory_id', write_order)}",
+                                turn_span=[],
+                            )
+                            if write_record and item_record:
+                                write_records.append(write_record)
+                                candidate_write_ids.append(write_record["write_id"])
+                                retrieved_write_ids.append(write_record["write_id"])
+                                selected_write_ids.append(write_record["write_id"])
+                                prompt_write_ids.append(write_record["write_id"])
+                                retrieved_items.append(dict(item_record))
+                                prompt_items.append(dict(item_record))
+
+                        for bucket_name, write_type in (
+                            ("retrieved_user_knowledge", "memoryos_user_knowledge"),
+                            ("retrieved_assistant_knowledge", "memoryos_assistant_knowledge"),
+                        ):
+                            for item in retrieval.get(bucket_name, []):
+                                write_order += 1
+                                write_record, item_record = build_memoryos_write_record(
+                                    qid=qid,
+                                    text=(item.get("knowledge") or "").strip(),
+                                    write_type=write_type,
+                                    write_order=write_order,
+                                    timestamp=item.get("timestamp"),
+                                    session_id=f"{write_type}:{write_order}",
+                                    turn_span=[],
+                                )
+                                if write_record and item_record:
+                                    write_records.append(write_record)
+                                    candidate_write_ids.append(write_record["write_id"])
+                                    retrieved_write_ids.append(write_record["write_id"])
+                                    selected_write_ids.append(write_record["write_id"])
+                                    prompt_write_ids.append(write_record["write_id"])
+                                    retrieved_items.append(dict(item_record))
+                                    prompt_items.append(dict(item_record))
+
+                    query_record = build_query_record(
+                        agent="memoryos",
+                        question_id=qid,
+                        question_type=qtype,
+                        query_time=entry.get("question_date"),
+                        question_date_used=entry.get("question_date"),
+                        baseline_answer=hypothesis,
+                        candidate_write_ids=candidate_write_ids,
+                        retrieved_write_ids=retrieved_write_ids,
+                        selected_write_ids=selected_write_ids,
+                        prompt_write_ids=prompt_write_ids,
+                        retrieved_items=retrieved_items,
+                        prompt_items=prompt_items,
+                        bridge_items=bridge_items,
+                        extra={
+                            "query_used": query if not args.dry_run else entry.get("question", ""),
+                            "reset_mode": args.reset_mode,
+                        },
+                    )
+                    append_audit_jsonl(audit_query_path, query_record)
+                    for write_record in write_records:
+                        append_audit_jsonl(audit_write_path, write_record)
+                    if args.enable_cf_wrapper and not args.dry_run:
+                        cf_events = collect_memoryos_write_events(entry, args.preserve_session_order)
+                        cf_baseline = run_memoryos_replay(
+                            entry=entry,
+                            events=cf_events,
+                            args=args,
+                            sample_storage_root=per_sample_storage,
+                            sample_tag=f"cfb_{i:03d}",
+                            silence_memoryos_logs=silence_memoryos_logs,
+                        )
+                        cf_write_records = cf_baseline["write_records"]
+                        cf_query_record = cf_baseline["query_record"]
+                        specs = build_cf_specs(
+                            question_type=qtype,
+                            query_record=cf_query_record,
+                            write_records=cf_write_records,
+                            answer_session_ids=entry.get("answer_session_ids", []),
+                            max_writes=args.cf_max_writes,
+                            scope=args.cf_target_scope,
+                        )
+                        cf_results = []
+                        for spec in specs:
+                            mutated_events, target_timestamp = apply_memoryos_cf_spec(cf_baseline["events"], spec)
+                            cf_outcome = run_memoryos_replay(
+                                entry=entry,
+                                events=mutated_events,
+                                args=args,
+                                sample_storage_root=per_sample_storage,
+                                sample_tag=f"cfr_{i:03d}",
+                                silence_memoryos_logs=silence_memoryos_logs,
+                            )
+                            cf_results.append(
+                                {
+                                    "spec": spec,
+                                    "cf_answer": cf_outcome["hypothesis"],
+                                    "cf_retrieved_write_ids": cf_outcome["query_record"].get("retrieved_write_ids", []),
+                                    "cf_prompt_write_ids": cf_outcome["query_record"].get("prompt_write_ids", []),
+                                    "target_timestamp": target_timestamp,
+                                }
+                            )
+                        run_records, query_summary = summarize_replay_cf(
+                            agent="memoryos",
+                            entry=entry,
+                            baseline_query_record=cf_query_record,
+                            write_records=cf_write_records,
+                            cf_results=cf_results,
+                            dominance_threshold=args.cf_dominance_threshold,
+                        )
+                        append_cf_outputs(
+                            run_path=cf_run_path,
+                            query_path=cf_query_path,
+                            run_records=run_records,
+                            query_summary=query_summary,
+                        )
 
                     n_ok += 1
                     elapsed = time.time() - start

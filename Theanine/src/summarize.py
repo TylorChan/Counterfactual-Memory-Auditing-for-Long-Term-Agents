@@ -4,9 +4,7 @@ import argparse
 import os
 
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
-from langchain_community.callbacks import get_openai_callback
+from openai import BadRequestError, OpenAI
 
 from utils.utils import get_dialogue, get_history_session_count
 from utils.config import get_openai_key
@@ -18,14 +16,22 @@ from utils.path import (
 
 class Summarizer:
     def __init__(self, prompt_name, model_name, temperature, data_name, result_path):
-        self.llm = ChatOpenAI(
-            temperature=temperature,
-            model_name=model_name,
-            api_key=get_openai_key()
+        self.client = OpenAI(
+            api_key=get_openai_key(),
+            base_url=os.environ.get("OPENAI_BASE_URL") or None,
         )
+        self.model_name = model_name
+        self.temperature = temperature
         self.template = load_prompt(prompt_name)
         self.episode = load_episode(data_name)
         self.result_path = result_path
+
+    @staticmethod
+    def _clean_text(value):
+        text = str(value or "")
+        text = text.replace("\x00", " ")
+        text = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
+        return text.encode("utf-8", "ignore").decode("utf-8", "ignore")
         
     def process_text(self, result):
         refined_summary = []
@@ -47,12 +53,27 @@ class Summarizer:
         return node
 
     def generate_gpt_response(self, input, input_variables):
-        with get_openai_callback() as cb:
-            prompt = PromptTemplate(template=self.template, input_variables=input_variables)
-            llm_chain = LLMChain(prompt=prompt, llm=self.llm)
-            result = llm_chain.apply(input)
-            cost = cb.total_cost
-        return result[0]['text'], cost
+        prompt = PromptTemplate(template=self.template, input_variables=input_variables)
+        if not input:
+            return "", 0.0
+        payload = input[0]
+        payload = {key: self._clean_text(value) for key, value in payload.items()}
+        prompt_text = self._clean_text(prompt.format(**payload))
+        last_exc = None
+        for attempt in range(3):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    temperature=self.temperature,
+                    max_tokens=2048,
+                )
+                return response.choices[0].message.content or "", 0.0
+            except BadRequestError as exc:
+                last_exc = exc
+                if "parse the JSON body" not in str(exc):
+                    raise
+        raise last_exc
 
     def summarize(self, dialogue, session_num):
         summary_, _ = self.generate_gpt_response(

@@ -4,9 +4,7 @@ import os
 import argparse
 
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
-from langchain.callbacks import get_openai_callback
+from openai import BadRequestError, OpenAI
 from src.retriever import Retriever
 from utils.config import get_openai_key
 from utils.utils import get_dialogue_, parse_session_num_from_memory_key
@@ -20,12 +18,13 @@ from utils.path import (
 
 class Theanine:
     def __init__(self, prompt_refine, prompt_rg, model_name, temperature, data_name, summary_path, linked_memory_path):
-        self.llm = ChatOpenAI(
-            temperature=temperature,
-            max_tokens=2048,
-            model_name=model_name,
-            api_key=get_openai_key()
+        self.client = OpenAI(
+            api_key=get_openai_key(),
+            base_url=os.environ.get("OPENAI_BASE_URL") or None,
         )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = 2048
         self.retriever = Retriever(3)
         self.refine_template = load_prompt(prompt_refine)
         self.response_template = load_prompt(prompt_rg)
@@ -33,13 +32,35 @@ class Theanine:
         self.summary = load_summary(summary_path)
         self.linked_memory = load_memory(linked_memory_path)
 
+    @staticmethod
+    def _clean_text(value):
+        text = str(value or "")
+        text = text.replace("\x00", " ")
+        text = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
+        return text.encode("utf-8", "ignore").decode("utf-8", "ignore")
+
     def generate_gpt_response(self, input, template, input_variables):
-        with get_openai_callback() as cb:
-            prompt = PromptTemplate(template=template, input_variables=input_variables)
-            llm_chain = LLMChain(prompt = prompt, llm = self.llm)
-            result = llm_chain.apply(input)
-            cost = cb.total_cost
-        return result[0]['text'], cost
+        prompt = PromptTemplate(template=template, input_variables=input_variables)
+        if not input:
+            return "", 0.0
+        payload = input[0]
+        payload = {key: self._clean_text(value) for key, value in payload.items()}
+        prompt_text = self._clean_text(prompt.format(**payload))
+        last_exc = None
+        for attempt in range(3):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+                return response.choices[0].message.content or "", 0.0
+            except BadRequestError as exc:
+                last_exc = exc
+                if "parse the JSON body" not in str(exc):
+                    raise
+        raise last_exc
 
     def generate_response(self, input_memory, current_dialogue, speaker):
         memory_text = ""
@@ -55,13 +76,22 @@ class Theanine:
         return result, cost
 
     def get_path_text(self, path):
-        text = ""
+        parts = []
         for i, element in enumerate(path):
             if i % 2 == 0:
-                text += f"[{self.summary[element]}] - "
+                summary_text = self.summary.get(element)
+                if not summary_text:
+                    return ""
+                parts.append(f"[{summary_text}]")
             else:
-                text += f"({element}) - "
-        return text[:-2]
+                parts.append(f"({element})")
+        return " - ".join(parts)
+
+    def is_valid_path(self, path):
+        for i, element in enumerate(path):
+            if i % 2 == 0 and element not in self.summary:
+                return False
+        return True
 
     def get_all_path(self, search_node, session_num):
         future_paths = []
@@ -137,9 +167,15 @@ class Theanine:
         all_timeline = {}
         for search_node, _ in retrieved_nodes:
             all_path = self.get_all_path(search_node, session_num)
-            timeline.append({"retrieved_node": search_node,  "all_timeline": all_path})
+            valid_path = [path for path in all_path if self.is_valid_path(path)]
+            if not valid_path:
+                if search_node in self.summary:
+                    valid_path = [[search_node]]
+                else:
+                    continue
+            timeline.append({"retrieved_node": search_node,  "all_timeline": valid_path})
             nothing_to_add = False
-            all_path_ = all_path.copy()
+            all_path_ = valid_path.copy()
             while nothing_to_add == False:
                 choosed_path = random.sample(all_path_, k=1)
                 all_path_.remove(choosed_path[0])
@@ -189,6 +225,8 @@ class Theanine:
             input_path_lst = []
             for timeline in timelines["use_timeline"]:
                 input_path = self.get_path_text(timeline)
+                if not input_path:
+                    continue
                 input_path_lst.append(input_path)
                 result, cost = self.link_refinement(current_dialogue, input_path)
                 input_memory.append(result)

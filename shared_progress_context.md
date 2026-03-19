@@ -34,7 +34,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary (latest)
+## My laptop progress summary
 
 - Update time (UTC): 2026-03-14 15:05:12
 - MacBook work shifted from ChatGPT-Web/THEANINE exploration to fairness control for the LongMemEval agent comparison.
@@ -47,17 +47,36 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 - The MSI launch plan now assumes six OpenAI keys/projects are available via `.env`: `OPENAI_API_KEY`, `OPENAI_API_KEY_1`, `...`, `OPENAI_API_KEY_5`, with the first 6 concurrent shards mapped one-to-one to distinct keys.
 - Next expected machine handoff: upload the updated code to MSI, run the new unified-QA baseline array there, then use those new baseline traces/results as the reference point before implementing the counterfactual replay wrapper.
 
-## MSI progress summary
+## MSI progress summary (latest)
 
-- Update time (UTC): 2026-03-12 (approx)
-- MSI is the main execution and consolidation machine for LongMemEval comparison across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.
-- Repo commands were standardized to `REPO_ROOT=\"$(git rev-parse --show-toplevel)\"` so run/eval paths stay machine-agnostic across MSI, laptop, and VM.
-- The 50-example subset `/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json` was checked to be usable for the shared benchmark and near-balanced across the 6 question types.
-- `evaluate_qa.py` now auto-loads `.env`, writes logs into `LongMemEval/eval_result/`, and is invoked with repo-root-relative paths.
-- Memory-alignment decisions used for the benchmark: MemoryOS uses `retrieval_queue_capacity=7` with `--reset-mode reinit`; LD-Agent defaults to `--no-force-flush-before-answer`; Anna uses corrected role mapping with `full_tertiary_init` off and `need-check` off by default; SHARE keeps its original memory module shape but uses the no-cap setting as the main comparison condition.
-- SHARE and LD-Agent both got `0/9` on the temporal questions in this 50-example subset. Trace analysis suggests this is mainly a memory/retrieval-structure issue rather than a simple bridge bug: SHARE often retrieves semantically related but temporally unusable memories and abstains with `I don't know`, while LD-Agent often reaches answer generation with only `0-1` related memories, which is usually not enough for multi-event temporal reasoning.
-- The temporal `0/9` result should not be overinterpreted as true accuracy `0`; the subset only contains 9 temporal questions, so the sample is small, but the failure pattern was consistent enough to indicate a real structural weakness.
-- THEANINE was integrated as an additional agent after the original 4-agent setup. Local upstream was patched to support dynamic session counts, multi-digit memory keys such as `s10-m1`, and to filter empty summary lines before embedding.
-- THEANINE full-history on MSI reached 47 successful predictions in `preds_theanine_s_50_fullhist.jsonl`; the run then failed on question 48 with OpenAI `insufficient_quota`, and a separate resume Slurm was prepared to finish the last 3 questions without overwriting the first 47 outputs.
-- MSI Git sync is currently easiest via SSH; HTTPS push failed because GitHub no longer accepts password authentication for Git operations.
-- `/users/9/chen7751/.codex/memories` is empty, so this file is the main maintained summary of MSI-side context.
+- Update time (UTC): 2026-03-19 (approx)
+- MSI is the main execution and consolidation machine for the unified-QA baseline and CF-only rollback analysis across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.
+- The unified factual QA head is now the baseline comparison setting for all 5 bridges; the native memory pipelines remain unchanged, and bridge traces were extended with audit-aligned write/query records for later CF replay.
+- CF design was settled around true write-time replay: rollback/time-shift rules target ingress write events before they enter each agent’s native memory pipeline; CF outputs are written separately as `*.cf_runs.jsonl` and `*.cf_queries.jsonl` so baseline traces stay clean.
+- Full baseline outputs for the main comparison run are the `03_14_22_46` files in `LongMemEval/`; Anna is `full`, SHARE/MemoryOS/LD-Agent are `p1+p2`, and THEANINE has `48/50` usable baseline examples.
+- The strongest currently usable CF results are in `/users/9/chen7751/csci8980/cf_compare_results/`, which contains:
+  - `memoryos_original_accuracy.txt` / `memoryos_afterCF_accuracy.txt`
+  - `share_original_accuracy.txt` / `share_afterCF_accuracy.txt`
+  - original baseline traces and CF traces for MemoryOS and SHARE
+  - merged eval result files for baseline vs CF-exported predictions
+  - `gini_comparison_memoryos_share.png` for the presentation Gini slide
+- Current verified accuracy comparison from `cf_compare_results`:
+  - MemoryOS baseline `0.50`; after rollback-CF export `0.50`
+  - SHARE baseline `0.20`; after rollback-CF export `0.20`
+  - These CF exports are not “improved models”; they use the highest-influence rollback answer per query as an eval proxy, so unchanged total accuracy does not mean rollback had no effect.
+- Current verified rollback sensitivity summary from `cf_compare_results`:
+  - MemoryOS: `150` rollback runs over `50` queries; `58/150` runs changed the answer; `30/50` queries have at least one dominant write; mean Gini `0.1143`; median Gini `0.0026`; non-null ETDL on `25/50` queries with mean `3.96` days and max `40.7` days.
+  - SHARE: `95` rollback runs over `50` queries; `9/95` runs changed the answer; `7/50` queries have at least one dominant write; mean Gini `0.0241`; median Gini `0.0`; non-null ETDL on `6/50` queries with mean `8.78` days and max `29.12` days.
+- Interpreting the current CF results: rollback is already useful as a diagnostic intervention, especially for MemoryOS, but not as an accuracy-improving intervention. MemoryOS shows stronger answer sensitivity and higher influence concentration than SHARE.
+- The first professor-facing metric is presentation-ready now: Gini over rollback influence scores can be shown for MemoryOS vs SHARE. The ETDL story is presentation-ready as an initial rollback-based temporal sensitivity result, strongest for MemoryOS.
+- The second professor-facing metric is not presentation-ready as a rigorous result yet: in the current MemoryOS and SHARE CF summaries, `gold_support_write_ids` and `baseline_retrieval_correct` are still empty/false for all queries, so the 2x2 retrieval-correctness off-diagonal story cannot yet be defended as complete.
+- Presentation guidance agreed in discussion:
+  - Do not sell CF as an accuracy-improving method; present it as a diagnostic intervention for measuring memory influence.
+  - Show the before/after accuracy table, then a Gini slide, then a MemoryOS temporal sensitivity/ETDL slide or a strong MemoryOS case study.
+  - Use a simple influence-score explanation on the Gini slide: rollback a write, compare answer / abstention / retrieval-prompt changes / answer-text distance, then compute Gini across multiple rollback targets for the query.
+  - Use a plain-language Gini title such as “Do A Few Memories Dominate the Answer?” rather than a heavily technical title.
+- Rollback-only CF infrastructure has dedicated Slurm scripts for MemoryOS, SHARE, LD-Agent, and THEANINE. MemoryOS and SHARE completed successfully enough to analyze; LD-Agent and THEANINE hit malformed-JSON OpenAI 400s in long runs.
+- Those LD-Agent/THEANINE long-run 400s were patched at the current code level by adding prompt cleaning and targeted retries around the relevant OpenAI request paths. New rerun Slurms were created:
+  - `run_ldagent_cf_only_rollback_rerun_s2.slurm` reruns only the failed LD-Agent `s2`
+  - `run_theanine_cf_only_rollback_rerun_full.slurm` reruns THEANINE fully from patched source
+- `/users/9/chen7751/.codex/memories` is empty, so this file remains the main maintained MSI-side summary.

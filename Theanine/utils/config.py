@@ -1,4 +1,5 @@
 import yaml
+import os
 from pathlib import Path
 
 
@@ -9,6 +10,9 @@ def load_config(config_file):
 
 
 def get_config_file_path():
+    env_path = os.environ.get("THEANINE_CONFIG_PATH")
+    if env_path:
+        return env_path
     current_path = Path(__file__)
     return str(current_path.resolve().parents[1] / 'conf.d' / 'config.yaml')
 

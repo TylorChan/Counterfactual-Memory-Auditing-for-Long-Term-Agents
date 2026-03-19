@@ -13,11 +13,27 @@ from types import MethodType, SimpleNamespace
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from tqdm import tqdm
+from openai import BadRequestError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from longmemeval_audit import (
+    append_jsonl as append_audit_jsonl,
+    build_query_record,
+    build_write_record,
+    derive_audit_paths,
+    make_write_id,
+)
+from longmemeval_counterfactual import (
+    add_cf_args,
+    append_cf_outputs,
+    build_cf_specs,
+    derive_cf_paths,
+    parse_dt,
+    summarize_replay_cf,
+)
 from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
 
 
@@ -25,6 +41,54 @@ from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
 class RetrievalSnapshot:
     context_memories: List[Dict]
     related_memories: List[Dict]
+
+
+def build_audit_item_from_memory(
+    qid: str,
+    item: Dict,
+    write_type: str,
+    stage: str,
+    write_order: int,
+) -> Tuple[Optional[Dict], Optional[Dict]]:
+    text = (item.get("summary") or item.get("dialog") or "").strip()
+    if not text:
+        return None, None
+    idx = item.get("idx")
+    timestamp = item.get("time")
+    write_id = make_write_id(
+        agent="ldagent",
+        question_id=qid,
+        write_type=write_type,
+        content=text,
+        session_id=f"idx:{idx}" if idx is not None else None,
+        turn_span=[idx] if idx is not None else None,
+        timestamp=timestamp,
+    )
+    write_record = build_write_record(
+        agent="ldagent",
+        question_id=qid,
+        write_id=write_id,
+        write_order=write_order,
+        write_type=write_type,
+        stage=stage,
+        timestamp=timestamp,
+        session_id=f"idx:{idx}" if idx is not None else None,
+        turn_span=[idx] if idx is not None else None,
+        content_text=text,
+        lineage_source_ids=[f"idx:{idx}"] if idx is not None else [],
+        audit_eligible=True,
+        origin="native_memory",
+    )
+    item_record = {
+        "write_id": write_id,
+        "stage": stage,
+        "rank": write_order,
+        "score": item.get("score"),
+        "timestamp": None if timestamp is None else str(timestamp),
+        "write_type": write_type,
+        "audit_eligible": True,
+    }
+    return write_record, item_record
 
 
 def load_env_file(candidates: List[Path], override: bool = False) -> Optional[Path]:
@@ -216,39 +280,49 @@ class OpenAIEmployClient:
         self.max_tokens = max_tokens
         self.token_usage = {"prompt": 0, "completion": 0, "total": 0}
 
-    def employ(self, system_prompt: str, user_prompt: str, name: str = "default") -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-        )
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            self.token_usage["prompt"] += int(getattr(usage, "prompt_tokens", 0) or 0)
-            self.token_usage["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
-            self.token_usage["total"] += int(getattr(usage, "total_tokens", 0) or 0)
+    @staticmethod
+    def _clean_text(value: object) -> str:
+        text = str(value or "")
+        text = text.replace("\x00", " ")
+        text = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
+        return text.encode("utf-8", "ignore").decode("utf-8", "ignore")
 
-        message = response.choices[0].message.content
-        return (message or "").strip()
+    def _create_with_retry(self, messages: List[Dict]) -> str:
+        cleaned_messages = [
+            {"role": msg["role"], "content": self._clean_text(msg.get("content", ""))}
+            for msg in messages
+        ]
+        last_exc = None
+        for attempt in range(3):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=cleaned_messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    self.token_usage["prompt"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+                    self.token_usage["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
+                    self.token_usage["total"] += int(getattr(usage, "total_tokens", 0) or 0)
+                message = response.choices[0].message.content
+                return (message or "").strip()
+            except BadRequestError as exc:
+                last_exc = exc
+                if "parse the JSON body" not in str(exc):
+                    raise
+                time.sleep(1 + attempt)
+        raise last_exc
+
+    def employ(self, system_prompt: str, user_prompt: str, name: str = "default") -> str:
+        return self._create_with_retry([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ])
 
     def chat(self, messages: List[Dict]) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-        )
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            self.token_usage["prompt"] += int(getattr(usage, "prompt_tokens", 0) or 0)
-            self.token_usage["completion"] += int(getattr(usage, "completion_tokens", 0) or 0)
-            self.token_usage["total"] += int(getattr(usage, "total_tokens", 0) or 0)
-        message = response.choices[0].message.content
-        return (message or "").strip()
+        return self._create_with_retry(messages)
 
 
 def parse_args() -> argparse.Namespace:
@@ -319,6 +393,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--env-override", action="store_true")
+    add_cf_args(parser)
     return parser.parse_args()
 
 
@@ -508,6 +583,268 @@ def force_flush_short_term_memory(event_memory) -> int:
     return 1
 
 
+def collect_ldagent_write_events(entry: Dict, preserve_session_order: bool) -> List[Dict]:
+    events: List[Dict] = []
+    pair_idx = 0
+    for session_idx, (session_date, session_turns) in enumerate(
+        get_ordered_sessions(entry, preserve_session_order),
+        start=1,
+    ):
+        session_ts = to_unix_seconds(session_date, fallback=time.time())
+        for user_input, agent_response in iter_qa_pairs(session_turns):
+            pair_idx += 1
+            events.append(
+                {
+                    "write_id": make_write_id(
+                        agent="ldagent",
+                        question_id=entry["question_id"],
+                        write_type="ldagent_dialogue_turn",
+                        content=f"SPEAKER_1: {user_input}\nSPEAKER_2: {agent_response}",
+                        session_id=f"s{session_idx}",
+                        turn_span=[pair_idx],
+                        timestamp=session_ts,
+                    ),
+                    "session_id": f"s{session_idx}",
+                    "turn_span": [pair_idx],
+                    "timestamp": session_ts,
+                    "user_input": user_input,
+                    "agent_response": agent_response,
+                    "original_index": pair_idx - 1,
+                }
+            )
+    return events
+
+
+def sort_ldagent_events(events: Iterable[Dict]) -> List[Dict]:
+    def sort_key(event: Dict):
+        raw = event.get("timestamp")
+        if raw is None:
+            return (1, 0.0, int(event.get("original_index", 0)))
+        return (0, float(raw), int(event.get("original_index", 0)))
+
+    return sorted(list(events), key=sort_key)
+
+
+def apply_ldagent_cf_spec(events: Iterable[Dict], spec) -> Tuple[List[Dict], Optional[str]]:
+    mutated: List[Dict] = []
+    target_timestamp: Optional[str] = None
+    for event in events:
+        if event["write_id"] != spec.target_write_id:
+            mutated.append(dict(event))
+            continue
+        if spec.cf_type == "rollback":
+            target_timestamp = str(event.get("timestamp"))
+            continue
+        updated = dict(event)
+        new_dt = parse_dt(spec.new_timestamp)
+        updated["timestamp"] = new_dt.timestamp() if new_dt is not None else event.get("timestamp")
+        target_timestamp = spec.new_timestamp
+        mutated.append(updated)
+    return sort_ldagent_events(mutated), target_timestamp
+
+
+def build_ldagent_event_write_records(qid: str, events: Iterable[Dict]) -> List[Dict]:
+    write_records: List[Dict] = []
+    for write_order, event in enumerate(sort_ldagent_events(events), start=1):
+        write_records.append(
+            build_write_record(
+                agent="ldagent",
+                question_id=qid,
+                write_id=event["write_id"],
+                write_order=write_order,
+                write_type="ldagent_dialogue_turn",
+                stage="write_ingress",
+                timestamp=event.get("timestamp"),
+                session_id=event.get("session_id"),
+                turn_span=event.get("turn_span"),
+                content_text=f"SPEAKER_1: {event['user_input']}\nSPEAKER_2: {event['agent_response']}",
+                lineage_source_ids=[event.get("session_id")] if event.get("session_id") else [],
+                audit_eligible=True,
+                origin="native_memory",
+            )
+        )
+    return write_records
+
+
+def run_ldagent_replay(
+    *,
+    entry: Dict,
+    events: List[Dict],
+    args: argparse.Namespace,
+    EventMemory,
+    Personas,
+    Generator,
+    llm_client,
+    logger,
+    ld_args: SimpleNamespace,
+) -> Dict:
+    qid = entry["question_id"]
+    qtype = entry.get("question_type", "unknown")
+    event_memory = EventMemory(
+        llm_client,
+        sample_id=f"cf_longmemeval_{qid}_{int(time.time()*1000)}",
+        logger=logger,
+        args=ld_args,
+        memory_cache=None,
+    )
+    patch_context_retrieve_session_gap(event_memory, args.session_gap_seconds)
+    personas = Personas(llm_client, logger=logger, args=ld_args)
+    generator = Generator(
+        llm_client,
+        sampling_dataset=[],
+        sample_id=0,
+        logger=logger,
+        args=ld_args,
+    )
+
+    pair_count = 0
+    last_context: List[Dict] = []
+    last_related: List[Dict] = []
+    event_id_by_idx: Dict[int, str] = {}
+    long_term_lineage_by_idx: Dict[int, List[str]] = {}
+
+    original_store = event_memory.store
+
+    def wrapped_store(ids, key, metadata, datatype="text"):
+        idx = None
+        if isinstance(metadata, dict):
+            idx = metadata.get("idx")
+        if idx is not None:
+            lineage = []
+            for item in event_memory.short_term_memory:
+                short_idx = item.get("idx")
+                write_id = event_id_by_idx.get(short_idx)
+                if write_id and write_id not in lineage:
+                    lineage.append(write_id)
+            if lineage:
+                long_term_lineage_by_idx[int(idx)] = lineage
+        return original_store(ids, key, metadata, datatype=datatype)
+
+    event_memory.store = wrapped_store
+    for event in sort_ldagent_events(events):
+        context_memories = event_memory.context_retrieve(
+            event["user_input"],
+            n_results=args.context_memory_number,
+            current_time=event["timestamp"],
+            datatype="text",
+        )
+        related_memories = event_memory.relevance_retrieve(
+            event["user_input"],
+            n_results=args.relevance_memory_number,
+            dist_thres=args.dist_thres,
+            current_time=event["timestamp"],
+            datatype="text",
+        )
+        if not args.disable_persona_update:
+            personas.traits_update(event["user_input"], event["agent_response"])
+        response_data = {
+            "idx": len(event_memory.short_term_memory),
+            "time": event["timestamp"],
+            "dialog": f"SPEAKER_2: {event['agent_response']}",
+        }
+        event_memory.short_term_memory.append(response_data)
+        event_id_by_idx[response_data["idx"]] = event["write_id"]
+        pair_count += 1
+        last_context = context_memories
+        last_related = related_memories
+
+    retrieval_after_ingest = RetrievalSnapshot(last_context, last_related)
+    n_forced_flush = 0
+    forced_flush_applied = False
+    if args.force_flush_before_answer:
+        n_forced_flush = force_flush_short_term_memory(event_memory)
+        forced_flush_applied = n_forced_flush > 0
+
+    hypothesis, retrieval_for_answer, final_query = answer_question(
+        entry,
+        event_memory,
+        personas,
+        generator,
+        ld_args,
+        args,
+    )
+
+    write_records = build_ldagent_event_write_records(qid, events)
+    candidate_write_ids = [record["write_id"] for record in write_records]
+    retrieved_items: List[Dict] = []
+    prompt_items: List[Dict] = []
+    retrieved_write_ids: List[str] = []
+    prompt_write_ids: List[str] = []
+    seen_ids = set()
+    for stage_name, memories in (
+        ("answer_context", retrieval_for_answer.context_memories),
+        ("answer_related", retrieval_for_answer.related_memories),
+    ):
+        for item in memories:
+            idx = item.get("idx")
+            mapped_ids: List[str] = []
+            if idx in event_id_by_idx:
+                mapped_ids = [event_id_by_idx[idx]]
+            elif idx in long_term_lineage_by_idx:
+                mapped_ids = list(long_term_lineage_by_idx[idx])
+            for write_id in mapped_ids:
+                if write_id in seen_ids:
+                    continue
+                seen_ids.add(write_id)
+                item_record = {
+                    "write_id": write_id,
+                    "stage": stage_name,
+                    "rank": len(prompt_items) + 1,
+                    "score": item.get("score"),
+                    "timestamp": None if item.get("time") is None else str(item.get("time")),
+                    "write_type": "ldagent_dialogue_turn",
+                    "audit_eligible": True,
+                }
+                retrieved_items.append(dict(item_record))
+                prompt_items.append(dict(item_record))
+                retrieved_write_ids.append(write_id)
+                prompt_write_ids.append(write_id)
+
+    query_record = build_query_record(
+        agent="ldagent",
+        question_id=qid,
+        question_type=qtype,
+        query_time=entry.get("question_date"),
+        question_date_used=entry.get("question_date"),
+        baseline_answer=hypothesis,
+        candidate_write_ids=candidate_write_ids,
+        retrieved_write_ids=retrieved_write_ids,
+        selected_write_ids=prompt_write_ids,
+        prompt_write_ids=prompt_write_ids,
+        retrieved_items=retrieved_items,
+        prompt_items=prompt_items,
+        bridge_items=[],
+        extra={
+            "query_used": final_query,
+            "session_gap_seconds": args.session_gap_seconds,
+        },
+    )
+    trace_obj = {
+        "question_id": qid,
+        "question_type": qtype,
+        "session_gap_seconds": args.session_gap_seconds,
+        "ori_mem_query": args.ori_mem_query,
+        "dist_thres": args.dist_thres,
+        "n_ingested_pairs": pair_count,
+        "n_context_after_ingest": len(retrieval_after_ingest.context_memories),
+        "n_related_after_ingest": len(retrieval_after_ingest.related_memories),
+        "n_context_for_answer": len(retrieval_for_answer.context_memories),
+        "n_related_for_answer": len(retrieval_for_answer.related_memories),
+        "forced_flush_applied": forced_flush_applied,
+        "n_forced_flush": n_forced_flush,
+        "query_used": final_query,
+        "context_for_answer": retrieval_for_answer.context_memories,
+        "related_for_answer": retrieval_for_answer.related_memories,
+    }
+    return {
+        "hypothesis": hypothesis,
+        "trace": trace_obj,
+        "query_record": query_record,
+        "write_records": write_records,
+        "events": sort_ldagent_events(events),
+    }
+
+
 def answer_question(
     entry: Dict,
     event_memory,
@@ -586,6 +923,14 @@ def main() -> None:
     args.out_jsonl.parent.mkdir(parents=True, exist_ok=True)
     if args.trace_jsonl:
         args.trace_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    audit_query_path, audit_write_path = derive_audit_paths(args.trace_jsonl)
+    cf_run_path, cf_query_path = derive_cf_paths(args.trace_jsonl)
+    for path in (audit_query_path, audit_write_path, cf_run_path, cf_query_path):
+        if path is not None and path.exists():
+            path.unlink()
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
 
     dataset = load_dataset(args.longmemeval_file)
     if args.offset:
@@ -717,6 +1062,122 @@ def main() -> None:
                             trace_obj["token_usage"] = llm_client.token_usage
                         trace_file.write(json.dumps(trace_obj, ensure_ascii=False) + "\n")
                         trace_file.flush()
+
+                    write_records: List[Dict] = []
+                    retrieved_items: List[Dict] = []
+                    prompt_items: List[Dict] = []
+                    candidate_write_ids: List[str] = []
+                    retrieved_write_ids: List[str] = []
+                    prompt_write_ids: List[str] = []
+                    write_order = 0
+                    for stage_name, memories in (
+                        ("after_ingest_context", retrieval_after_ingest.context_memories),
+                        ("after_ingest_related", retrieval_after_ingest.related_memories),
+                        ("answer_context", retrieval_for_answer.context_memories),
+                        ("answer_related", retrieval_for_answer.related_memories),
+                    ):
+                        write_type = "context_memory" if "context" in stage_name else "related_memory"
+                        for item in memories:
+                            write_order += 1
+                            write_record, item_record = build_audit_item_from_memory(
+                                qid=qid,
+                                item=item,
+                                write_type=write_type,
+                                stage=stage_name,
+                                write_order=write_order,
+                            )
+                            if write_record is None or item_record is None:
+                                continue
+                            write_records.append(write_record)
+                            candidate_write_ids.append(write_record["write_id"])
+                            if stage_name.startswith("answer_"):
+                                retrieved_items.append(item_record)
+                                prompt_items.append(dict(item_record))
+                                retrieved_write_ids.append(write_record["write_id"])
+                                prompt_write_ids.append(write_record["write_id"])
+
+                    query_record = build_query_record(
+                        agent="ldagent",
+                        question_id=qid,
+                        question_type=qtype,
+                        query_time=entry.get("question_date"),
+                        question_date_used=entry.get("question_date"),
+                        baseline_answer=hypothesis,
+                        candidate_write_ids=candidate_write_ids,
+                        retrieved_write_ids=retrieved_write_ids,
+                        selected_write_ids=prompt_write_ids,
+                        prompt_write_ids=prompt_write_ids,
+                        retrieved_items=retrieved_items,
+                        prompt_items=prompt_items,
+                        bridge_items=[],
+                        extra={
+                            "query_used": final_query,
+                            "session_gap_seconds": args.session_gap_seconds,
+                        },
+                    )
+                    append_audit_jsonl(audit_query_path, query_record)
+                    for write_record in write_records:
+                        append_audit_jsonl(audit_write_path, write_record)
+                    if args.enable_cf_wrapper and not args.dry_run:
+                        cf_events = collect_ldagent_write_events(entry, args.preserve_session_order)
+                        cf_baseline = run_ldagent_replay(
+                            entry=entry,
+                            events=cf_events,
+                            args=args,
+                            EventMemory=EventMemory,
+                            Personas=Personas,
+                            Generator=Generator,
+                            llm_client=llm_client,
+                            logger=logger,
+                            ld_args=ld_args,
+                        )
+                        cf_write_records = cf_baseline["write_records"]
+                        cf_query_record = cf_baseline["query_record"]
+                        specs = build_cf_specs(
+                            question_type=qtype,
+                            query_record=cf_query_record,
+                            write_records=cf_write_records,
+                            answer_session_ids=entry.get("answer_session_ids", []),
+                            max_writes=args.cf_max_writes,
+                            scope=args.cf_target_scope,
+                        )
+                        cf_results = []
+                        for spec in specs:
+                            mutated_events, target_timestamp = apply_ldagent_cf_spec(cf_baseline["events"], spec)
+                            cf_outcome = run_ldagent_replay(
+                                entry=entry,
+                                events=mutated_events,
+                                args=args,
+                                EventMemory=EventMemory,
+                                Personas=Personas,
+                                Generator=Generator,
+                                llm_client=llm_client,
+                                logger=logger,
+                                ld_args=ld_args,
+                            )
+                            cf_results.append(
+                                {
+                                    "spec": spec,
+                                    "cf_answer": cf_outcome["hypothesis"],
+                                    "cf_retrieved_write_ids": cf_outcome["query_record"].get("retrieved_write_ids", []),
+                                    "cf_prompt_write_ids": cf_outcome["query_record"].get("prompt_write_ids", []),
+                                    "target_timestamp": target_timestamp,
+                                }
+                            )
+                        run_records, query_summary = summarize_replay_cf(
+                            agent="ldagent",
+                            entry=entry,
+                            baseline_query_record=cf_query_record,
+                            write_records=cf_write_records,
+                            cf_results=cf_results,
+                            dominance_threshold=args.cf_dominance_threshold,
+                        )
+                        append_cf_outputs(
+                            run_path=cf_run_path,
+                            query_path=cf_query_path,
+                            run_records=run_records,
+                            query_summary=query_summary,
+                        )
 
                     success += 1
                     elapsed = time.time() - start_time

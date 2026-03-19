@@ -17,6 +17,22 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from longmemeval_audit import (
+    append_jsonl as append_audit_jsonl,
+    build_query_record,
+    build_write_record,
+    derive_audit_paths,
+    make_write_id,
+)
+from longmemeval_counterfactual import (
+    add_cf_args,
+    append_cf_outputs,
+    build_cf_specs,
+    derive_cf_paths,
+    format_dt,
+    parse_dt,
+    summarize_replay_cf,
+)
 from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
 
 
@@ -45,6 +61,15 @@ class EpisodeSessionData:
     s1_name: str
     s2_name: str
     information: EpisodeSessionInformation
+
+
+@dataclass(frozen=True)
+class ShareWriteEvent:
+    write_id: str
+    session_id: str
+    timestamp: str
+    dialogue_text: str
+    original_index: int
 
 
 def load_env_file(candidates: Sequence[Path], override: bool = False) -> Optional[Path]:
@@ -261,6 +286,147 @@ def memory_item_count(memory: ShareMemory) -> int:
         + len(memory.shared)
         + len(memory.mutual)
     )
+
+
+def iter_memory_bucket_items(memory: ShareMemory) -> Iterable[Tuple[str, str]]:
+    for bucket in ("p1", "p2", "t1", "t2", "shared", "mutual"):
+        for item in getattr(memory, bucket):
+            yield bucket, item
+
+
+def memory_bucket_item_set(memory: ShareMemory) -> set[Tuple[str, str]]:
+    return set(iter_memory_bucket_items(memory))
+
+
+def build_share_write_record(
+    qid: str,
+    bucket: str,
+    text: str,
+    write_order: int,
+    stage: str,
+    timestamp: Optional[str],
+    session_id: Optional[str],
+) -> Tuple[Dict, Dict]:
+    write_type = f"share_{bucket}"
+    write_id = make_write_id(
+        agent="share",
+        question_id=qid,
+        write_type=write_type,
+        content=text,
+        session_id=session_id,
+        timestamp=timestamp,
+    )
+    write_record = build_write_record(
+        agent="share",
+        question_id=qid,
+        write_id=write_id,
+        write_order=write_order,
+        write_type=write_type,
+        stage=stage,
+        timestamp=timestamp,
+        session_id=session_id,
+        turn_span=[],
+        content_text=text,
+        lineage_source_ids=[session_id] if session_id else [],
+        audit_eligible=True,
+        origin="native_memory",
+    )
+    item_record = {
+        "write_id": write_id,
+        "stage": stage,
+        "rank": write_order,
+        "score": None,
+        "timestamp": None if timestamp is None else str(timestamp),
+        "write_type": write_type,
+        "audit_eligible": True,
+    }
+    return write_record, item_record
+
+
+def build_share_session_event(
+    *,
+    qid: str,
+    session_id: str,
+    timestamp: str,
+    dialogue_text: str,
+    original_index: int,
+) -> ShareWriteEvent:
+    write_id = make_write_id(
+        agent="share",
+        question_id=qid,
+        write_type="share_session_update",
+        content=dialogue_text,
+        session_id=session_id,
+        timestamp=timestamp,
+    )
+    return ShareWriteEvent(
+        write_id=write_id,
+        session_id=session_id,
+        timestamp=timestamp,
+        dialogue_text=dialogue_text,
+        original_index=original_index,
+    )
+
+
+def build_share_event_write_records(qid: str, events: Sequence[ShareWriteEvent]) -> List[Dict]:
+    write_records: List[Dict] = []
+    for write_order, event in enumerate(events, start=1):
+        write_records.append(
+            build_write_record(
+                agent="share",
+                question_id=qid,
+                write_id=event.write_id,
+                write_order=write_order,
+                write_type="share_session_update",
+                stage="write_ingress",
+                timestamp=event.timestamp,
+                session_id=event.session_id,
+                turn_span=[],
+                content_text=event.dialogue_text,
+                lineage_source_ids=[event.session_id],
+                audit_eligible=True,
+                origin="native_memory",
+            )
+        )
+    return write_records
+
+
+def sort_share_events_for_replay(events: Sequence[ShareWriteEvent]) -> List[ShareWriteEvent]:
+    def sort_key(event: ShareWriteEvent) -> Tuple[int, object, int]:
+        dt = parse_dt(event.timestamp)
+        if dt is None:
+            return (1, event.timestamp, event.original_index)
+        return (0, dt, event.original_index)
+
+    return sorted(events, key=sort_key)
+
+
+def apply_share_cf_spec(
+    events: Sequence[ShareWriteEvent],
+    spec,
+) -> Tuple[List[ShareWriteEvent], Optional[str]]:
+    mutated: List[ShareWriteEvent] = []
+    target_timestamp: Optional[str] = None
+    for event in events:
+        if event.write_id != spec.target_write_id:
+            mutated.append(event)
+            continue
+        if spec.cf_type == "rollback":
+            target_timestamp = event.timestamp
+            continue
+        if spec.cf_type == "time_shift":
+            shifted = ShareWriteEvent(
+                write_id=event.write_id,
+                session_id=event.session_id,
+                timestamp=spec.new_timestamp or event.timestamp,
+                dialogue_text=event.dialogue_text,
+                original_index=event.original_index,
+            )
+            target_timestamp = shifted.timestamp
+            mutated.append(shifted)
+            continue
+        mutated.append(event)
+    return sort_share_events_for_replay(mutated), target_timestamp
 
 
 def simple_tokenize(text: str) -> List[str]:
@@ -548,6 +714,274 @@ def answer_question(
     del question, recent_dialogue, force_abstain_when_uncertain
     evidence_rows = [EvidenceRow(text=item, source="selected") for item in selected_memories]
     return llm.chat_text(build_unified_qa_messages(query_with_date, evidence_rows)).strip()
+
+
+def collect_share_write_events(entry: Dict, preserve_session_order: bool, max_session_dialogue_chars: int) -> List[ShareWriteEvent]:
+    events: List[ShareWriteEvent] = []
+    ordered_sessions = get_ordered_sessions(entry, preserve_session_order)
+    for session_idx, (date_raw, turns) in enumerate(ordered_sessions, start=1):
+        pairs = list(iter_qa_pairs(turns))
+        if not pairs:
+            continue
+        dialogue_text = tail_chars(
+            format_pairs_as_dialogue(pairs),
+            max_session_dialogue_chars,
+        )
+        events.append(
+            build_share_session_event(
+                qid=entry["question_id"],
+                session_id=f"s{session_idx}",
+                timestamp=date_raw,
+                dialogue_text=dialogue_text,
+                original_index=len(events),
+            )
+        )
+    return events
+
+
+def run_share_replay(
+    *,
+    entry: Dict,
+    events: Sequence[ShareWriteEvent],
+    llm: Optional["OpenAIJsonClient"],
+    args: argparse.Namespace,
+) -> Dict:
+    qid = entry["question_id"]
+    qtype = entry.get("question_type", "unknown")
+    memory = ShareMemory()
+    memory_meta: Dict[Tuple[str, str], Dict[str, str]] = {}
+    strict_extract_fallbacks = 0
+    strict_update_fallbacks = 0
+    strict_extract_text_fallbacks = 0
+    strict_update_text_fallbacks = 0
+    strict_select_text_fallbacks = 0
+    strict_episode_memory = not args.disable_strict_episode_memory
+    strict_json_io = not args.disable_strict_json_io
+
+    history_pairs: List[Tuple[str, str]] = []
+    event_lookup = {event.session_id: event for event in events}
+    replay_events = sort_share_events_for_replay(events)
+    for event in replay_events:
+        previous_items = memory_bucket_item_set(memory)
+        if args.dry_run:
+            continue
+        if strict_episode_memory:
+            current_memory, used_text_fallback = strict_extract_session_memory_with_fallback(
+                llm=llm,
+                dialogue_text=event.dialogue_text,
+                max_items=args.memory_max_items,
+                json_retries=args.json_retries,
+                strict_json_io=strict_json_io,
+            )
+            if used_text_fallback:
+                strict_extract_text_fallbacks += 1
+            if memory_item_count(current_memory) == 0:
+                current_memory = extract_session_memory(
+                    llm=llm,
+                    dialogue_text=event.dialogue_text,
+                    max_items=args.memory_max_items,
+                    dry_run=False,
+                    json_retries=args.json_retries,
+                )
+                strict_extract_fallbacks += 1
+            previous_memory = memory
+            memory, used_text_fallback = strict_update_memory_with_fallback(
+                llm=llm,
+                previous=previous_memory,
+                current=current_memory,
+                max_items=args.memory_max_items,
+                json_retries=args.json_retries,
+                strict_json_io=strict_json_io,
+            )
+            if used_text_fallback:
+                strict_update_text_fallbacks += 1
+            if memory_item_count(memory) == 0 and memory_item_count(current_memory) > 0:
+                memory = update_share_memory(
+                    llm=llm,
+                    previous=previous_memory,
+                    current=current_memory,
+                    max_items=args.memory_max_items,
+                    dry_run=False,
+                    json_retries=args.json_retries,
+                    retain_mutual=args.retain_mutual_memory,
+                )
+                strict_update_fallbacks += 1
+        else:
+            current_memory = extract_session_memory(
+                llm=llm,
+                dialogue_text=event.dialogue_text,
+                max_items=args.memory_max_items,
+                dry_run=False,
+                json_retries=args.json_retries,
+            )
+            memory = update_share_memory(
+                llm=llm,
+                previous=memory,
+                current=current_memory,
+                max_items=args.memory_max_items,
+                dry_run=False,
+                json_retries=args.json_retries,
+                retain_mutual=args.retain_mutual_memory,
+            )
+        current_projected = canonicalize_memory(
+            current_memory,
+            max_items=args.memory_max_items,
+            retain_mutual=args.retain_mutual_memory,
+        )
+        current_items = memory_bucket_item_set(current_projected)
+        for bucket, item in iter_memory_bucket_items(memory):
+            key = (bucket, item)
+            if key in current_items or key not in previous_items:
+                memory_meta[key] = {"session_id": event.session_id, "timestamp": event.timestamp}
+
+    original_pairs_by_session = {
+        f"s{idx}": list(iter_qa_pairs(turns))
+        for idx, (_date_raw, turns) in enumerate(get_ordered_sessions(entry, args.preserve_session_order), start=1)
+    }
+    for event in replay_events:
+        history_pairs.extend(original_pairs_by_session.get(event.session_id, []))
+
+    question = (entry.get("question") or "").strip()
+    query_with_date = question
+    if not args.omit_question_date and entry.get("question_date"):
+        query_with_date = f"Current date: {entry['question_date']}\n\n{question}"
+    recent_pairs = history_pairs[-args.recent_turn_window :] if args.recent_turn_window > 0 else history_pairs
+    recent_dialogue = tail_chars(
+        format_pairs_as_dialogue(recent_pairs),
+        args.max_recent_dialogue_chars,
+    )
+    if strict_episode_memory:
+        candidates = flatten_memory_candidates_raw(
+            memory,
+            include_mutual=args.include_mutual_in_candidates,
+        )
+        if args.dry_run:
+            selected = lexical_topk(question, candidates, args.selection_top_k)
+        else:
+            selected, used_text_fallback = strict_select_memories_with_fallback(
+                llm=llm,
+                question=question,
+                memory=memory,
+                recent_dialogue=recent_dialogue,
+                top_k=args.selection_top_k,
+                include_mutual=args.include_mutual_in_candidates,
+                strict_selection_mode=args.strict_selection_mode,
+                json_retries=args.json_retries,
+                strict_json_io=strict_json_io,
+            )
+            if used_text_fallback:
+                strict_select_text_fallbacks += 1
+    else:
+        candidates = flatten_memory_candidates(memory, include_mutual=args.include_mutual_in_candidates)
+        selected = select_memories(
+            llm=llm,
+            question=question,
+            recent_dialogue=recent_dialogue,
+            candidates=candidates,
+            top_k=args.selection_top_k,
+            dry_run=args.dry_run,
+            json_retries=args.json_retries,
+        )
+    hypothesis = answer_question(
+        llm=llm,
+        question=question,
+        query_with_date=query_with_date,
+        selected_memories=selected,
+        recent_dialogue=recent_dialogue,
+        dry_run=args.dry_run,
+        force_abstain_when_uncertain=args.force_abstain_when_uncertain,
+    )
+
+    write_records = build_share_event_write_records(qid, replay_events)
+    candidate_write_ids = [event.write_id for event in replay_events]
+    retrieved_write_ids: List[str] = []
+    selected_write_ids: List[str] = []
+    prompt_write_ids: List[str] = []
+    retrieved_items: List[Dict] = []
+    prompt_items: List[Dict] = []
+    bridge_items: List[Dict] = []
+    seen_selected = set()
+    for item in selected:
+        matched_any = False
+        for bucket, bucket_item in iter_memory_bucket_items(memory):
+            if bucket_item != item:
+                continue
+            meta = memory_meta.get((bucket, bucket_item), {})
+            event = event_lookup.get(meta.get("session_id", ""))
+            if event is None or event.write_id in seen_selected:
+                continue
+            matched_any = True
+            seen_selected.add(event.write_id)
+            item_record = {
+                "write_id": event.write_id,
+                "stage": "selected_memory",
+                "rank": len(prompt_items) + 1,
+                "score": None,
+                "timestamp": event.timestamp,
+                "write_type": "share_session_update",
+                "audit_eligible": True,
+            }
+            retrieved_write_ids.append(event.write_id)
+            selected_write_ids.append(event.write_id)
+            prompt_write_ids.append(event.write_id)
+            retrieved_items.append(dict(item_record))
+            prompt_items.append(dict(item_record))
+        if not matched_any:
+            bridge_items.append(
+                {"text": item, "source": "share_selected_unmapped", "audit_eligible": False}
+            )
+
+    query_record = build_query_record(
+        agent="share",
+        question_id=qid,
+        question_type=qtype,
+        query_time=entry.get("question_date"),
+        question_date_used=entry.get("question_date"),
+        baseline_answer=hypothesis,
+        candidate_write_ids=candidate_write_ids,
+        retrieved_write_ids=retrieved_write_ids,
+        selected_write_ids=selected_write_ids,
+        prompt_write_ids=prompt_write_ids,
+        retrieved_items=retrieved_items,
+        prompt_items=prompt_items,
+        bridge_items=bridge_items,
+        extra={
+            "query_used": query_with_date,
+            "strict_episode_memory": strict_episode_memory,
+            "strict_selection_mode": args.strict_selection_mode if strict_episode_memory else "json",
+            "strict_extract_fallbacks": strict_extract_fallbacks,
+            "strict_update_fallbacks": strict_update_fallbacks,
+            "strict_extract_text_fallbacks": strict_extract_text_fallbacks,
+            "strict_update_text_fallbacks": strict_update_text_fallbacks,
+            "strict_select_text_fallbacks": strict_select_text_fallbacks,
+        },
+    )
+    trace_obj = {
+        "question_id": qid,
+        "question_type": qtype,
+        "strict_episode_memory": strict_episode_memory,
+        "strict_selection_mode": args.strict_selection_mode if strict_episode_memory else "json",
+        "strict_json_io": strict_json_io if strict_episode_memory else False,
+        "n_sessions": len(replay_events),
+        "n_pairs": len(history_pairs),
+        "memory": asdict(memory),
+        "n_candidates": len(candidates),
+        "selected_memories": selected,
+        "memory_item_count": memory_item_count(memory),
+        "strict_extract_fallbacks": strict_extract_fallbacks,
+        "strict_update_fallbacks": strict_update_fallbacks,
+        "strict_extract_text_fallbacks": strict_extract_text_fallbacks,
+        "strict_update_text_fallbacks": strict_update_text_fallbacks,
+        "strict_select_text_fallbacks": strict_select_text_fallbacks,
+        "query_used": query_with_date,
+    }
+    return {
+        "hypothesis": hypothesis,
+        "trace": trace_obj,
+        "query_record": query_record,
+        "write_records": write_records,
+        "events": replay_events,
+    }
 
 
 def call_prompt_text(llm: OpenAIJsonClient, prompt: str, retries: int = 2) -> str:
@@ -1287,6 +1721,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--env-override", action="store_true")
+    add_cf_args(parser)
     return parser.parse_args()
 
 
@@ -1321,6 +1756,14 @@ def main() -> None:
     args.out_jsonl.parent.mkdir(parents=True, exist_ok=True)
     if args.trace_jsonl:
         args.trace_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    audit_query_path, audit_write_path = derive_audit_paths(args.trace_jsonl)
+    cf_run_path, cf_query_path = derive_cf_paths(args.trace_jsonl)
+    for path in (audit_query_path, audit_write_path, cf_run_path, cf_query_path):
+        if path is not None and path.exists():
+            path.unlink()
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
 
     dataset = load_dataset(args.longmemeval_file)
     if args.offset:
@@ -1359,185 +1802,72 @@ def main() -> None:
                 qid = entry.get("question_id", f"idx_{idx}")
                 qtype = entry.get("question_type", "unknown")
                 try:
-                    memory = ShareMemory()
-                    history_pairs: List[Tuple[str, str]] = []
-                    session_count = 0
-                    strict_extract_fallbacks = 0
-                    strict_update_fallbacks = 0
-                    strict_extract_text_fallbacks = 0
-                    strict_update_text_fallbacks = 0
-                    strict_select_text_fallbacks = 0
-                    ordered_sessions = get_ordered_sessions(entry, args.preserve_session_order)
-                    total_sessions = len(ordered_sessions)
-                    for _date_raw, turns in ordered_sessions:
-                        pairs = list(iter_qa_pairs(turns))
-                        if not pairs:
-                            continue
-                        dialogue_text = tail_chars(
-                            format_pairs_as_dialogue(pairs),
-                            args.max_session_dialogue_chars,
-                        )
-                        history_pairs.extend(pairs)
-                        session_count += 1
-
-                        if args.dry_run:
-                            continue
-
-                        if strict_episode_memory:
-                            current_memory, used_text_fallback = strict_extract_session_memory_with_fallback(
-                                llm=llm,
-                                dialogue_text=dialogue_text,
-                                max_items=args.memory_max_items,
-                                json_retries=args.json_retries,
-                                strict_json_io=strict_json_io,
-                            )
-                            if used_text_fallback:
-                                strict_extract_text_fallbacks += 1
-                            if memory_item_count(current_memory) == 0:
-                                # Strict parser can be brittle with format drift; recover via JSON pipeline.
-                                current_memory = extract_session_memory(
-                                    llm=llm,
-                                    dialogue_text=dialogue_text,
-                                    max_items=args.memory_max_items,
-                                    dry_run=False,
-                                    json_retries=args.json_retries,
-                                )
-                                strict_extract_fallbacks += 1
-                            previous_memory = memory
-                            memory, used_text_fallback = strict_update_memory_with_fallback(
-                                llm=llm,
-                                previous=previous_memory,
-                                current=current_memory,
-                                max_items=args.memory_max_items,
-                                json_retries=args.json_retries,
-                                strict_json_io=strict_json_io,
-                            )
-                            if used_text_fallback:
-                                strict_update_text_fallbacks += 1
-                            if (
-                                memory_item_count(memory) == 0
-                                and memory_item_count(current_memory) > 0
-                            ):
-                                memory = update_share_memory(
-                                    llm=llm,
-                                    previous=previous_memory,
-                                    current=current_memory,
-                                    max_items=args.memory_max_items,
-                                    dry_run=False,
-                                    json_retries=args.json_retries,
-                                    retain_mutual=args.retain_mutual_memory,
-                                )
-                                strict_update_fallbacks += 1
-                        else:
-                            current_memory = extract_session_memory(
-                                llm=llm,
-                                dialogue_text=dialogue_text,
-                                max_items=args.memory_max_items,
-                                dry_run=False,
-                                json_retries=args.json_retries,
-                            )
-                            memory = update_share_memory(
-                                llm=llm,
-                                previous=memory,
-                                current=current_memory,
-                                max_items=args.memory_max_items,
-                                dry_run=False,
-                                json_retries=args.json_retries,
-                                retain_mutual=args.retain_mutual_memory,
-                            )
-                        step = max(1, args.session_progress_every)
-                        if session_count % step == 0 or session_count == total_sessions:
-                            elapsed = time.time() - started
-                            pbar.set_postfix(
-                                ok=success,
-                                fail=failed,
-                                last=qid,
-                                stage="ingest",
-                                sess=f"{session_count}/{total_sessions}",
-                                elapsed_s=f"{elapsed:.1f}",
-                            )
-
-                    question = (entry.get("question") or "").strip()
-                    query_with_date = question
-                    if not args.omit_question_date and entry.get("question_date"):
-                        query_with_date = f"Current date: {entry['question_date']}\n\n{question}"
-
-                    recent_pairs = history_pairs[-args.recent_turn_window :] if args.recent_turn_window > 0 else history_pairs
-                    recent_dialogue = tail_chars(
-                        format_pairs_as_dialogue(recent_pairs),
-                        args.max_recent_dialogue_chars,
+                    share_events = collect_share_write_events(
+                        entry,
+                        args.preserve_session_order,
+                        args.max_session_dialogue_chars,
                     )
-                    if strict_episode_memory:
-                        candidates = flatten_memory_candidates_raw(
-                            memory,
-                            include_mutual=args.include_mutual_in_candidates,
-                        )
-                        if args.dry_run:
-                            selected = lexical_topk(question, candidates, args.selection_top_k)
-                        else:
-                            selected, used_text_fallback = strict_select_memories_with_fallback(
-                                llm=llm,
-                                question=question,
-                                memory=memory,
-                                recent_dialogue=recent_dialogue,
-                                top_k=args.selection_top_k,
-                                include_mutual=args.include_mutual_in_candidates,
-                                strict_selection_mode=args.strict_selection_mode,
-                                json_retries=args.json_retries,
-                                strict_json_io=strict_json_io,
-                            )
-                            if used_text_fallback:
-                                strict_select_text_fallbacks += 1
-                    else:
-                        candidates = flatten_memory_candidates(
-                            memory,
-                            include_mutual=args.include_mutual_in_candidates,
-                        )
-                        selected = select_memories(
-                            llm=llm,
-                            question=question,
-                            recent_dialogue=recent_dialogue,
-                            candidates=candidates,
-                            top_k=args.selection_top_k,
-                            dry_run=args.dry_run,
-                            json_retries=args.json_retries,
-                        )
-                    hypothesis = answer_question(
+                    result = run_share_replay(
+                        entry=entry,
+                        events=share_events,
                         llm=llm,
-                        question=question,
-                        query_with_date=query_with_date,
-                        selected_memories=selected,
-                        recent_dialogue=recent_dialogue,
-                        dry_run=args.dry_run,
-                        force_abstain_when_uncertain=args.force_abstain_when_uncertain,
+                        args=args,
                     )
+                    hypothesis = result["hypothesis"]
 
                     pred_obj = {"question_id": qid, "hypothesis": hypothesis}
                     pred_file.write(json.dumps(pred_obj, ensure_ascii=False) + "\n")
                     pred_file.flush()
 
                     if trace_file:
-                        trace_obj = {
-                            "question_id": qid,
-                            "question_type": qtype,
-                            "strict_episode_memory": strict_episode_memory,
-                            "strict_selection_mode": args.strict_selection_mode if strict_episode_memory else "json",
-                            "strict_json_io": strict_json_io if strict_episode_memory else False,
-                            "n_sessions": session_count,
-                            "n_pairs": len(history_pairs),
-                            "memory": asdict(memory),
-                            "n_candidates": len(candidates),
-                            "selected_memories": selected,
-                            "memory_item_count": memory_item_count(memory),
-                            "strict_extract_fallbacks": strict_extract_fallbacks,
-                            "strict_update_fallbacks": strict_update_fallbacks,
-                            "strict_extract_text_fallbacks": strict_extract_text_fallbacks,
-                            "strict_update_text_fallbacks": strict_update_text_fallbacks,
-                            "strict_select_text_fallbacks": strict_select_text_fallbacks,
-                            "query_used": query_with_date,
-                        }
-                        trace_file.write(json.dumps(trace_obj, ensure_ascii=False) + "\n")
+                        trace_file.write(json.dumps(result["trace"], ensure_ascii=False) + "\n")
                         trace_file.flush()
+                    query_record = result["query_record"]
+                    write_records = result["write_records"]
+                    append_audit_jsonl(audit_query_path, query_record)
+                    for write_record in write_records:
+                        append_audit_jsonl(audit_write_path, write_record)
+                    if args.enable_cf_wrapper and not args.dry_run:
+                        specs = build_cf_specs(
+                            question_type=qtype,
+                            query_record=query_record,
+                            write_records=write_records,
+                            answer_session_ids=entry.get("answer_session_ids", []),
+                            max_writes=args.cf_max_writes,
+                            scope=args.cf_target_scope,
+                        )
+                        cf_results = []
+                        for spec in specs:
+                            mutated_events, target_timestamp = apply_share_cf_spec(result["events"], spec)
+                            cf_outcome = run_share_replay(
+                                entry=entry,
+                                events=mutated_events,
+                                llm=llm,
+                                args=args,
+                            )
+                            cf_results.append(
+                                {
+                                    "spec": spec,
+                                    "cf_answer": cf_outcome["hypothesis"],
+                                    "cf_retrieved_write_ids": cf_outcome["query_record"].get("retrieved_write_ids", []),
+                                    "cf_prompt_write_ids": cf_outcome["query_record"].get("prompt_write_ids", []),
+                                    "target_timestamp": target_timestamp,
+                                }
+                            )
+                        run_records, query_summary = summarize_replay_cf(
+                            agent="share",
+                            entry=entry,
+                            baseline_query_record=query_record,
+                            write_records=write_records,
+                            cf_results=cf_results,
+                            dominance_threshold=args.cf_dominance_threshold,
+                        )
+                        append_cf_outputs(
+                            run_path=cf_run_path,
+                            query_path=cf_query_path,
+                            run_records=run_records,
+                            query_summary=query_summary,
+                        )
 
                     success += 1
                     elapsed = time.time() - started

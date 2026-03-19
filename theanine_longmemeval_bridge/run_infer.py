@@ -5,6 +5,7 @@ import os
 import random
 import shutil
 import sys
+import time
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -15,9 +16,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from longmemeval_audit import (
+    append_jsonl as append_audit_jsonl,
+    build_query_record,
+    build_write_record,
+    derive_audit_paths,
+    make_write_id,
+)
+from longmemeval_counterfactual import (
+    add_cf_args,
+    append_cf_outputs,
+    build_cf_specs,
+    derive_cf_paths,
+    parse_dt,
+    summarize_replay_cf,
+)
 from longmemeval_unified_answer import EvidenceRow, build_unified_qa_messages
 
 SESSION_NAMES = ["first", "second", "third", "fourth", "fifth"]
+
+
+class TheanineWriteEvent(dict):
+    pass
 
 
 def session_field_prefix(session_num: int) -> str:
@@ -48,6 +68,41 @@ def load_env_file(candidates: List[Path]) -> Optional[Path]:
             os.environ.setdefault(key, value)
         return path
     return None
+
+
+class OpenAIAnswerClient:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        timeout: float = 120.0,
+    ) -> None:
+        from openai import OpenAI
+
+        self.client = OpenAI(api_key=api_key, timeout=timeout)
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+    def chat(self, messages: List[Dict], retries: int = 2) -> str:
+        last_error: Optional[Exception] = None
+        for attempt in range(retries + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+                return (response.choices[0].message.content or "").strip()
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                if attempt >= retries:
+                    break
+                time.sleep(1.0 + attempt)
+        raise RuntimeError(f"LLM call failed: {last_error}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +139,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Show THEANINE internal prints.",
     )
+    add_cf_args(parser)
     return parser.parse_args()
 
 
@@ -96,12 +152,62 @@ def maybe_silence_stdout(enabled: bool):
         yield
 
 
-def ensure_openai_config(theanine_dir: Path, api_key: str) -> Path:
-    conf_dir = theanine_dir / "conf.d"
+def ensure_openai_config(config_root: Path, api_key: str) -> Path:
+    conf_dir = config_root / "conf.d"
     conf_dir.mkdir(parents=True, exist_ok=True)
     config_path = conf_dir / "config.yaml"
     config_path.write_text(f"openai:\n  key: {api_key}\n", encoding="utf-8")
     return config_path
+
+
+def ensure_upstream_workspace(theanine_dir: Path, workspace_dir: Path, api_key: str) -> Dict[str, Path]:
+    resources_dir = workspace_dir / "resources"
+    prompts_dir = resources_dir / "prompts"
+    data_dir = resources_dir / "data"
+    result_dir = workspace_dir / "results" / "memory"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    if prompts_dir.exists() or prompts_dir.is_symlink():
+        if prompts_dir.is_symlink() and prompts_dir.resolve() == (theanine_dir / "resources" / "prompts").resolve():
+            pass
+        else:
+            if prompts_dir.is_dir() and not prompts_dir.is_symlink():
+                shutil.rmtree(prompts_dir)
+            else:
+                prompts_dir.unlink()
+            prompts_dir.symlink_to(theanine_dir / "resources" / "prompts", target_is_directory=True)
+    else:
+        prompts_dir.parent.mkdir(parents=True, exist_ok=True)
+        prompts_dir.symlink_to(theanine_dir / "resources" / "prompts", target_is_directory=True)
+
+    config_path = ensure_openai_config(workspace_dir, api_key)
+    return {
+        "workspace_dir": workspace_dir,
+        "data_dir": data_dir,
+        "result_dir": result_dir,
+        "config_path": config_path,
+    }
+
+
+@contextmanager
+def theanine_workspace_env(workspace_dir: Path, config_path: Path):
+    old_project = os.environ.get("THEANINE_PROJECT_PATH")
+    old_config = os.environ.get("THEANINE_CONFIG_PATH")
+    os.environ["THEANINE_PROJECT_PATH"] = str(workspace_dir)
+    os.environ["THEANINE_CONFIG_PATH"] = str(config_path)
+    try:
+        yield
+    finally:
+        if old_project is None:
+            os.environ.pop("THEANINE_PROJECT_PATH", None)
+        else:
+            os.environ["THEANINE_PROJECT_PATH"] = old_project
+        if old_config is None:
+            os.environ.pop("THEANINE_CONFIG_PATH", None)
+        else:
+            os.environ["THEANINE_CONFIG_PATH"] = old_config
 
 
 def import_theanine_modules(theanine_dir: Path):
@@ -170,6 +276,89 @@ def build_episode(entry: Dict, history_indices: List[int], omit_question_date: b
     return episode
 
 
+def collect_theanine_write_events(
+    entry: Dict,
+    history_sessions: int,
+    preserve_session_order: bool,
+) -> List[TheanineWriteEvent]:
+    ordered_indices = sorted_session_indices(entry, preserve_session_order=preserve_session_order)
+    if history_sessions > 0:
+        ordered_indices = ordered_indices[:history_sessions]
+    events: List[TheanineWriteEvent] = []
+    for original_index, idx in enumerate(ordered_indices):
+        events.append(
+            TheanineWriteEvent(
+                write_id=make_write_id(
+                    agent="theanine",
+                    question_id=entry["question_id"],
+                    write_type="theanine_session_ingress",
+                    content=json.dumps(entry["haystack_sessions"][idx], ensure_ascii=False),
+                    session_id=entry["haystack_session_ids"][idx],
+                    turn_span=[idx],
+                    timestamp=entry["haystack_dates"][idx],
+                ),
+                session_id=entry["haystack_session_ids"][idx],
+                timestamp=entry["haystack_dates"][idx],
+                turns=entry["haystack_sessions"][idx],
+                source_index=idx,
+                original_index=original_index,
+            )
+        )
+    return events
+
+
+def sort_theanine_events(events: Sequence[TheanineWriteEvent]) -> List[TheanineWriteEvent]:
+    def sort_key(event: TheanineWriteEvent):
+        dt = parse_dt(event.get("timestamp"))
+        if dt is None:
+            return (1, str(event.get("timestamp") or ""), int(event.get("original_index", 0)))
+        return (0, dt, int(event.get("original_index", 0)))
+
+    return sorted(list(events), key=sort_key)
+
+
+def apply_theanine_cf_spec(
+    events: Sequence[TheanineWriteEvent],
+    spec,
+) -> Tuple[List[TheanineWriteEvent], Optional[str]]:
+    mutated: List[TheanineWriteEvent] = []
+    target_timestamp: Optional[str] = None
+    for event in events:
+        if event["write_id"] != spec.target_write_id:
+            mutated.append(TheanineWriteEvent(**dict(event)))
+            continue
+        if spec.cf_type == "rollback":
+            target_timestamp = event.get("timestamp")
+            continue
+        updated = TheanineWriteEvent(**dict(event))
+        updated["timestamp"] = spec.new_timestamp or event.get("timestamp")
+        target_timestamp = updated["timestamp"]
+        mutated.append(updated)
+    return sort_theanine_events(mutated), target_timestamp
+
+
+def build_episode_from_events(entry: Dict, events: Sequence[TheanineWriteEvent], omit_question_date: bool) -> Dict:
+    history_session_count = len(events)
+    total_session_count = history_session_count + 1
+    episode: Dict[str, object] = {
+        "dataID": entry["question_id"],
+        "history_session_count": history_session_count,
+        "total_session_count": total_session_count,
+    }
+    for session_num, event in enumerate(events, start=1):
+        prefix = session_field_prefix(session_num)
+        dialogue, speakers = to_theanine_speakers(event["turns"])
+        episode[f"{prefix}_dialogue"] = dialogue
+        episode[f"{prefix}_speakers"] = speakers
+    query = entry["question"].strip()
+    if not omit_question_date:
+        query = f"Current date: {entry['question_date']}\n\n{query}"
+    qa_prefix = session_field_prefix(total_session_count)
+    episode[f"{qa_prefix}_dialogue"] = [query, ""]
+    episode[f"{qa_prefix}_speakers"] = ["Speaker A", "Speaker B"]
+    return episode
+
+
 def build_trace_stub(
     entry: Dict,
     history_sessions: int,
@@ -204,6 +393,265 @@ def build_trace_stub(
     }
 
 
+def parse_summary_session_num(node_id: str) -> Optional[int]:
+    try:
+        prefix = node_id.split("-", 1)[0]
+        if prefix.startswith("s"):
+            return int(prefix[1:])
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def build_theanine_audit_records(entry: Dict, trace: Dict, hypothesis: str) -> Tuple[List[Dict], Dict]:
+    runtime_root = trace.get("runtime_dir")
+    if not runtime_root:
+        return [], build_query_record(
+            agent="theanine",
+            question_id=entry["question_id"],
+            question_type=entry.get("question_type", "unknown"),
+            query_time=entry.get("question_date"),
+            question_date_used=trace.get("question_date_used"),
+            baseline_answer=hypothesis,
+            candidate_write_ids=[],
+            retrieved_write_ids=[],
+            selected_write_ids=[],
+            prompt_write_ids=[],
+            retrieved_items=[],
+            prompt_items=[],
+            bridge_items=[],
+            extra={
+                "history_sessions_requested": trace.get("history_sessions_requested"),
+                "history_sessions_used": trace.get("history_sessions_used"),
+                "dry_run": trace.get("dry_run", False),
+            },
+        )
+
+    runtime_dir = Path(runtime_root) / "results"
+    summary_path = runtime_dir / "summary.json"
+    if not summary_path.exists():
+        return [], build_query_record(
+            agent="theanine",
+            question_id=entry["question_id"],
+            question_type=entry.get("question_type", "unknown"),
+            query_time=entry.get("question_date"),
+            question_date_used=trace.get("question_date_used"),
+            baseline_answer=hypothesis,
+            candidate_write_ids=[],
+            retrieved_write_ids=[],
+            selected_write_ids=[],
+            prompt_write_ids=[],
+            retrieved_items=[],
+            prompt_items=[],
+            bridge_items=[],
+            extra={"query_used": entry.get("question", "")},
+        )
+
+    summary_nodes = json.loads(summary_path.read_text(encoding="utf-8"))
+    selected_session_dates = trace.get("selected_session_dates", [])
+    selected_session_ids = trace.get("selected_session_ids", [])
+    session_time_map = {idx + 1: selected_session_dates[idx] for idx in range(len(selected_session_dates))}
+    session_id_map = {idx + 1: selected_session_ids[idx] for idx in range(len(selected_session_ids))}
+
+    write_records: List[Dict] = []
+    candidate_write_ids: List[str] = []
+    text_to_ids: Dict[str, List[Tuple[str, Dict]]] = {}
+    for write_order, (node_id, text) in enumerate(summary_nodes.items(), start=1):
+        if not isinstance(text, str) or not text.strip():
+            continue
+        session_num = parse_summary_session_num(node_id)
+        timestamp = session_time_map.get(session_num)
+        session_id = session_id_map.get(session_num, f"s{session_num}" if session_num is not None else None)
+        write_id = make_write_id(
+            agent="theanine",
+            question_id=entry["question_id"],
+            write_type="theanine_summary_node",
+            content=text,
+            session_id=session_id,
+            turn_span=[node_id],
+            timestamp=timestamp,
+        )
+        write_record = build_write_record(
+            agent="theanine",
+            question_id=entry["question_id"],
+            write_id=write_id,
+            write_order=write_order,
+            write_type="theanine_summary_node",
+            stage="summary_memory_state",
+            timestamp=timestamp,
+            session_id=session_id,
+            turn_span=[node_id],
+            content_text=text,
+            lineage_source_ids=[session_id, node_id] if session_id else [node_id],
+            audit_eligible=True,
+            origin="native_memory",
+        )
+        write_records.append(write_record)
+        candidate_write_ids.append(write_id)
+        item_record = {
+            "write_id": write_id,
+            "stage": "summary_memory_state",
+            "rank": write_order,
+            "score": None,
+            "timestamp": None if timestamp is None else str(timestamp),
+            "write_type": "theanine_summary_node",
+            "audit_eligible": True,
+        }
+        norm_text = " ".join(text.split()).strip()
+        text_to_ids.setdefault(norm_text, []).append((write_id, item_record))
+
+    retrieved_write_ids: List[str] = []
+    selected_write_ids: List[str] = []
+    prompt_write_ids: List[str] = []
+    retrieved_items: List[Dict] = []
+    prompt_items: List[Dict] = []
+    bridge_items: List[Dict] = []
+    seen_ids = set()
+
+    for item in trace.get("before_refinement") or []:
+        norm_text = " ".join(str(item).split()).strip()
+        matches = text_to_ids.get(norm_text, [])
+        if not matches:
+            bridge_items.append(
+                {"text": item, "source": "theanine_before_refinement_unmapped", "audit_eligible": False}
+            )
+            continue
+        for write_id, item_record in matches:
+            if write_id in seen_ids:
+                continue
+            seen_ids.add(write_id)
+            retrieved_write_ids.append(write_id)
+            selected_write_ids.append(write_id)
+            prompt_write_ids.append(write_id)
+            retrieved_items.append(dict(item_record))
+            prompt_items.append(dict(item_record))
+
+    for item in trace.get("after_refinement") or []:
+        bridge_items.append(
+            {"text": item, "source": "theanine_after_refinement", "audit_eligible": False}
+        )
+
+    query_record = build_query_record(
+        agent="theanine",
+        question_id=entry["question_id"],
+        question_type=entry.get("question_type", "unknown"),
+        query_time=entry.get("question_date"),
+        question_date_used=trace.get("question_date_used"),
+        baseline_answer=hypothesis,
+        candidate_write_ids=candidate_write_ids,
+        retrieved_write_ids=retrieved_write_ids,
+        selected_write_ids=selected_write_ids,
+        prompt_write_ids=prompt_write_ids,
+        retrieved_items=retrieved_items,
+        prompt_items=prompt_items,
+        bridge_items=bridge_items,
+        extra={
+            "history_sessions_requested": trace.get("history_sessions_requested"),
+            "history_sessions_used": trace.get("history_sessions_used"),
+        },
+    )
+    return write_records, query_record
+
+
+def build_theanine_event_write_records(entry: Dict, events: Sequence[TheanineWriteEvent]) -> List[Dict]:
+    write_records: List[Dict] = []
+    for write_order, event in enumerate(sort_theanine_events(events), start=1):
+        write_records.append(
+            build_write_record(
+                agent="theanine",
+                question_id=entry["question_id"],
+                write_id=event["write_id"],
+                write_order=write_order,
+                write_type="theanine_session_ingress",
+                stage="write_ingress",
+                timestamp=event.get("timestamp"),
+                session_id=event.get("session_id"),
+                turn_span=[event.get("source_index")],
+                content_text=json.dumps(event.get("turns", []), ensure_ascii=False),
+                lineage_source_ids=[event.get("session_id")] if event.get("session_id") else [],
+                audit_eligible=True,
+                origin="native_memory",
+            )
+        )
+    return write_records
+
+
+def build_theanine_replay_audit(
+    entry: Dict,
+    events: Sequence[TheanineWriteEvent],
+    trace: Dict,
+    hypothesis: str,
+) -> Tuple[List[Dict], Dict]:
+    write_records = build_theanine_event_write_records(entry, events)
+    event_ids_by_session: Dict[str, str] = {str(event["session_id"]): event["write_id"] for event in events}
+    runtime_root = trace.get("runtime_dir")
+    text_to_write_ids: Dict[str, List[str]] = {}
+    if runtime_root:
+        summary_path = Path(runtime_root) / "results" / "summary.json"
+        if summary_path.exists():
+            summary_nodes = json.loads(summary_path.read_text(encoding="utf-8"))
+            selected_session_ids = trace.get("selected_session_ids") or []
+            for node_id, text in summary_nodes.items():
+                if not isinstance(text, str) or not text.strip():
+                    continue
+                session_num = parse_summary_session_num(node_id)
+                if session_num is None or session_num < 1 or session_num > len(selected_session_ids):
+                    continue
+                write_id = event_ids_by_session.get(str(selected_session_ids[session_num - 1]))
+                if not write_id:
+                    continue
+                norm_text = " ".join(text.split()).strip()
+                text_to_write_ids.setdefault(norm_text, []).append(write_id)
+    retrieved_write_ids: List[str] = []
+    selected_write_ids: List[str] = []
+    prompt_write_ids: List[str] = []
+    retrieved_items: List[Dict] = []
+    prompt_items: List[Dict] = []
+    seen = set()
+    for item in trace.get("before_refinement") or []:
+        text = " ".join(str(item).split()).strip()
+        if not text:
+            continue
+        for write_id in text_to_write_ids.get(text, []):
+            if write_id in seen:
+                continue
+            seen.add(write_id)
+            item_record = {
+                "write_id": write_id,
+                "stage": "before_refinement",
+                "rank": len(prompt_items) + 1,
+                "score": None,
+                "timestamp": next((record["timestamp"] for record in write_records if record["write_id"] == write_id), None),
+                "write_type": "theanine_session_ingress",
+                "audit_eligible": True,
+            }
+            retrieved_write_ids.append(write_id)
+            selected_write_ids.append(write_id)
+            prompt_write_ids.append(write_id)
+            retrieved_items.append(dict(item_record))
+            prompt_items.append(dict(item_record))
+    query_record = build_query_record(
+        agent="theanine",
+        question_id=entry["question_id"],
+        question_type=entry.get("question_type", "unknown"),
+        query_time=entry.get("question_date"),
+        question_date_used=trace.get("question_date_used"),
+        baseline_answer=hypothesis,
+        candidate_write_ids=[record["write_id"] for record in write_records],
+        retrieved_write_ids=retrieved_write_ids,
+        selected_write_ids=selected_write_ids,
+        prompt_write_ids=prompt_write_ids,
+        retrieved_items=retrieved_items,
+        prompt_items=prompt_items,
+        bridge_items=[],
+        extra={
+            "history_sessions_requested": trace.get("history_sessions_requested"),
+            "history_sessions_used": trace.get("history_sessions_used"),
+        },
+    )
+    return write_records, query_record
+
+
 def write_episode_json(path: Path, episode: Dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps([episode], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -221,14 +669,22 @@ def run_theanine_for_entry(
     dry_run: bool,
     verbose_upstream: bool,
     seed: int,
+    events: Optional[Sequence[TheanineWriteEvent]] = None,
 ) -> Tuple[str, Dict]:
-    ordered_indices = sorted_session_indices(entry, preserve_session_order=preserve_session_order)
-    if history_sessions > 0:
-        selected_indices = ordered_indices[:history_sessions]
+    if events is None:
+        ordered_indices = sorted_session_indices(entry, preserve_session_order=preserve_session_order)
+        if history_sessions > 0:
+            selected_indices = ordered_indices[:history_sessions]
+        else:
+            selected_indices = ordered_indices
+        episode = build_episode(entry, selected_indices, omit_question_date=omit_question_date)
+        selected_session_ids = [entry["haystack_session_ids"][i] for i in selected_indices]
+        selected_session_dates = [entry["haystack_dates"][i] for i in selected_indices]
     else:
-        selected_indices = ordered_indices
-
-    episode = build_episode(entry, selected_indices, omit_question_date=omit_question_date)
+        selected_indices = [int(event["source_index"]) for event in events]
+        episode = build_episode_from_events(entry, events, omit_question_date=omit_question_date)
+        selected_session_ids = [str(event["session_id"]) for event in events]
+        selected_session_dates = [str(event["timestamp"]) for event in events]
     qa_session_num = len(selected_indices) + 1
 
     sample_dir = runtime_dir / entry["question_id"]
@@ -237,10 +693,17 @@ def run_theanine_for_entry(
     (sample_dir / "data").mkdir(parents=True, exist_ok=True)
     result_dir = sample_dir / "results"
 
-    upstream_data_dir = theanine_dir / "resources" / "data"
-    upstream_result_dir = theanine_dir / "results" / "memory"
-    upstream_data_dir.mkdir(parents=True, exist_ok=True)
-    upstream_result_dir.mkdir(parents=True, exist_ok=True)
+    upstream_workspace = sample_dir / "upstream_workspace"
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is required for THEANINE runs.")
+    workspace = ensure_upstream_workspace(
+        theanine_dir=theanine_dir,
+        workspace_dir=upstream_workspace,
+        api_key=api_key,
+    )
+    upstream_data_dir = workspace["data_dir"]
+    upstream_result_dir = workspace["result_dir"]
 
     episode_filename = f"bridge_{entry['question_id']}.json"
     episode_path = upstream_data_dir / episode_filename
@@ -253,6 +716,10 @@ def run_theanine_for_entry(
         omit_question_date=omit_question_date,
         seed=seed,
     )
+    trace["selected_history_indices"] = selected_indices
+    trace["selected_session_ids"] = selected_session_ids
+    trace["selected_session_dates"] = selected_session_dates
+    trace["history_sessions_used"] = len(selected_indices)
 
     if dry_run:
         hypothesis = f"[dry-run] THEANINE would answer question {entry['question_id']}"
@@ -260,39 +727,40 @@ def run_theanine_for_entry(
         return hypothesis, trace
 
     random.seed(seed)
-    Summarizer, MemoryConstructor, Theanine = import_theanine_modules(theanine_dir)
-    with maybe_silence_stdout(not verbose_upstream):
-        summarizer = Summarizer(
-            prompt_name="dialogue-summarization.txt",
-            model_name=llm_model,
-            temperature=temperature,
-            data_name=episode_filename,
-            result_path=str(upstream_result_dir),
-        )
-        summary = summarizer.summarize_all_session()
-        summarizer.save(summary)
+    with theanine_workspace_env(workspace["workspace_dir"], workspace["config_path"]):
+        Summarizer, MemoryConstructor, Theanine = import_theanine_modules(theanine_dir)
+        with maybe_silence_stdout(not verbose_upstream):
+            summarizer = Summarizer(
+                prompt_name="dialogue-summarization.txt",
+                model_name=llm_model,
+                temperature=temperature,
+                data_name=episode_filename,
+                result_path=str(upstream_result_dir),
+            )
+            summary = summarizer.summarize_all_session()
+            summarizer.save(summary)
 
-        constructor = MemoryConstructor(
-            prompt_name="relation-extraction.txt",
-            model_name=llm_model,
-            temperature=temperature,
-            data_name=episode_filename,
-            summary_path="summary.json",
-            result_path=str(upstream_result_dir),
-        )
-        constructor.linking()
-        constructor.save()
+            constructor = MemoryConstructor(
+                prompt_name="relation-extraction.txt",
+                model_name=llm_model,
+                temperature=temperature,
+                data_name=episode_filename,
+                summary_path="summary.json",
+                result_path=str(upstream_result_dir),
+            )
+            constructor.linking()
+            constructor.save()
 
-        theanine = Theanine(
-            prompt_refine="timeline-refinement.txt",
-            prompt_rg="response-generation.txt",
-            model_name=llm_model,
-            temperature=temperature,
-            data_name=episode_filename,
-            summary_path="summary.json",
-            linked_memory_path="linked_memory.json",
-        )
-        result_dict, total_cost = theanine.theanine_all(session_num=qa_session_num)
+            theanine = Theanine(
+                prompt_refine="timeline-refinement.txt",
+                prompt_rg="response-generation.txt",
+                model_name=llm_model,
+                temperature=temperature,
+                data_name=episode_filename,
+                summary_path="summary.json",
+                linked_memory_path="linked_memory.json",
+            )
+            result_dict, total_cost = theanine.theanine_all(session_num=qa_session_num)
 
     local_episode_copy = sample_dir / "data" / episode_filename
     write_episode_json(local_episode_copy, episode)
@@ -317,16 +785,13 @@ def run_theanine_for_entry(
             text = " ".join(str(item).split()).strip()
             if text:
                 evidence_rows.append(EvidenceRow(text=text, source="theanine_raw_memory"))
-    from langchain_openai import ChatOpenAI
-
-    qa_llm = ChatOpenAI(
+    qa_llm = OpenAIAnswerClient(
+        api_key=os.environ.get("OPENAI_API_KEY") or "",
+        model=llm_model,
         temperature=0.0,
         max_tokens=256,
-        model_name=llm_model,
-        api_key=os.environ.get("OPENAI_API_KEY"),
     )
-    response = qa_llm.invoke(build_unified_qa_messages(query, evidence_rows))
-    hypothesis = (response.content or "").strip()
+    hypothesis = qa_llm.chat(build_unified_qa_messages(query, evidence_rows)).strip()
     trace.update(
         {
             "total_cost": total_cost,
@@ -362,9 +827,6 @@ def main() -> None:
     if not api_key and not args.dry_run:
         raise RuntimeError("OPENAI_API_KEY is required unless --dry-run is used.")
 
-    if not args.dry_run:
-        ensure_openai_config(args.theanine_dir, api_key)
-
     dataset = load_dataset(args.longmemeval_file)
     dataset = dataset[args.offset :]
     if args.limit > 0:
@@ -375,6 +837,14 @@ def main() -> None:
         args.out_jsonl.unlink()
     if args.trace_jsonl and args.trace_jsonl.exists():
         args.trace_jsonl.unlink()
+    audit_query_path, audit_write_path = derive_audit_paths(args.trace_jsonl)
+    cf_run_path, cf_query_path = derive_cf_paths(args.trace_jsonl)
+    for path in (audit_query_path, audit_write_path, cf_run_path, cf_query_path):
+        if path is not None and path.exists():
+            path.unlink()
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
 
     ok = 0
     fail = 0
@@ -398,6 +868,80 @@ def main() -> None:
             append_jsonl(args.out_jsonl, {"question_id": qid, "hypothesis": hypothesis})
             if args.trace_jsonl:
                 append_jsonl(args.trace_jsonl, trace)
+            write_records, query_record = build_theanine_audit_records(entry, trace, hypothesis)
+            append_audit_jsonl(audit_query_path, query_record)
+            for write_record in write_records:
+                append_audit_jsonl(audit_write_path, write_record)
+            if args.enable_cf_wrapper and not args.dry_run:
+                cf_events = collect_theanine_write_events(
+                    entry,
+                    args.history_sessions,
+                    args.preserve_session_order,
+                )
+                cf_hypothesis, cf_trace = run_theanine_for_entry(
+                    entry=entry,
+                    theanine_dir=args.theanine_dir,
+                    runtime_dir=args.runtime_dir / "cf_baseline",
+                    llm_model=args.llm_model,
+                    temperature=args.temperature,
+                    history_sessions=args.history_sessions,
+                    preserve_session_order=args.preserve_session_order,
+                    omit_question_date=args.omit_question_date,
+                    dry_run=False,
+                    verbose_upstream=args.verbose_upstream,
+                    seed=args.seed + idx,
+                    events=cf_events,
+                )
+                cf_write_records, cf_query_record = build_theanine_replay_audit(entry, cf_events, cf_trace, cf_hypothesis)
+                specs = build_cf_specs(
+                    question_type=entry.get("question_type", "unknown"),
+                    query_record=cf_query_record,
+                    write_records=cf_write_records,
+                    answer_session_ids=entry.get("answer_session_ids", []),
+                    max_writes=args.cf_max_writes,
+                    scope=args.cf_target_scope,
+                )
+                cf_results = []
+                for spec in specs:
+                    mutated_events, target_timestamp = apply_theanine_cf_spec(cf_events, spec)
+                    outcome_hypothesis, outcome_trace = run_theanine_for_entry(
+                        entry=entry,
+                        theanine_dir=args.theanine_dir,
+                        runtime_dir=args.runtime_dir / "cf_runs",
+                        llm_model=args.llm_model,
+                        temperature=args.temperature,
+                        history_sessions=args.history_sessions,
+                        preserve_session_order=args.preserve_session_order,
+                        omit_question_date=args.omit_question_date,
+                        dry_run=False,
+                        verbose_upstream=args.verbose_upstream,
+                        seed=args.seed + idx,
+                        events=mutated_events,
+                    )
+                    _, outcome_query_record = build_theanine_replay_audit(entry, mutated_events, outcome_trace, outcome_hypothesis)
+                    cf_results.append(
+                        {
+                            "spec": spec,
+                            "cf_answer": outcome_hypothesis,
+                            "cf_retrieved_write_ids": outcome_query_record.get("retrieved_write_ids", []),
+                            "cf_prompt_write_ids": outcome_query_record.get("prompt_write_ids", []),
+                            "target_timestamp": target_timestamp,
+                        }
+                    )
+                run_records, query_summary = summarize_replay_cf(
+                    agent="theanine",
+                    entry=entry,
+                    baseline_query_record=cf_query_record,
+                    write_records=cf_write_records,
+                    cf_results=cf_results,
+                    dominance_threshold=args.cf_dominance_threshold,
+                )
+                append_cf_outputs(
+                    run_path=cf_run_path,
+                    query_path=cf_query_path,
+                    run_records=run_records,
+                    query_summary=query_summary,
+                )
             ok += 1
             progress.set_postfix(ok=ok, fail=fail, last=qid)
         except Exception as exc:  # noqa: BLE001

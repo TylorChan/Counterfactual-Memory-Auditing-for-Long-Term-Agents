@@ -78,6 +78,30 @@ MEMOS_REPO="${WORKDIR}/MemoryOS"
 LD_REPO="${WORKDIR}/LD-Agent"
 THEANINE_REPO="${WORKDIR}/Theanine"
 
+load_env_file() {
+  local env_file="$1"
+  if [[ ! -f "${env_file}" ]]; then
+    return 0
+  fi
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    line="${line#export }"
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      local key="${BASH_REMATCH[1]}"
+      local value="${BASH_REMATCH[2]}"
+      if [[ "${value}" =~ ^\".*\"$ ]]; then
+        value="${value:1:${#value}-2}"
+      elif [[ "${value}" =~ ^\'.*\'$ ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+      export "${key}=${value}"
+    fi
+  done < "${env_file}"
+}
+
+load_env_file "${WORKDIR}/.env"
+
 TASK_SPECS=(
   "theanine|p1|0|25"
   "theanine|p2|25|25"

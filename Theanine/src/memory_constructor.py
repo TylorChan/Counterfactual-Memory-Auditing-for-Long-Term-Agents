@@ -4,9 +4,7 @@ import argparse
 import os
 
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
-from langchain.callbacks import get_openai_callback
+from openai import BadRequestError, OpenAI
 
 from src.retriever import Retriever
 from utils.config import get_openai_key
@@ -25,18 +23,26 @@ from utils.utils import (
 
 class MemoryConstructor:
     def __init__(self, prompt_name, model_name, temperature, data_name, summary_path, result_path):
-        self.llm = ChatOpenAI(
-            temperature=temperature,
-            max_tokens=2048,
-            model_name=model_name,
-            api_key=get_openai_key()
+        self.client = OpenAI(
+            api_key=get_openai_key(),
+            base_url=os.environ.get("OPENAI_BASE_URL") or None,
         )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = 2048
         self.retriever = Retriever(3)
         self.template = load_prompt(prompt_name)
         self.episode = load_episode(data_name)
         self.summary = load_summary(summary_path)
         self.result_path = result_path
         self.init_memory(self.summary)
+
+    @staticmethod
+    def _clean_text(value):
+        text = str(value or "")
+        text = text.replace("\x00", " ")
+        text = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
+        return text.encode("utf-8", "ignore").decode("utf-8", "ignore")
         
     def init_memory(self, memory):
         self.linked_memory = {}
@@ -45,12 +51,27 @@ class MemoryConstructor:
         return
         
     def generate_gpt_response(self, text, input_variables):
-        with get_openai_callback() as cb:
-            prompt = PromptTemplate(template=self.template, input_variables=input_variables)
-            llm_chain = LLMChain(prompt=prompt, llm=self.llm)
-            result = llm_chain.apply(text)
-            cost = cb.total_cost
-        return result[0]['text'], cost
+        prompt = PromptTemplate(template=self.template, input_variables=input_variables)
+        if not text:
+            return "", 0.0
+        payload = text[0]
+        payload = {key: self._clean_text(value) for key, value in payload.items()}
+        prompt_text = self._clean_text(prompt.format(**payload))
+        last_exc = None
+        for attempt in range(3):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+                return response.choices[0].message.content or "", 0.0
+            except BadRequestError as exc:
+                last_exc = exc
+                if "parse the JSON body" not in str(exc):
+                    raise
+        raise last_exc
 
     def extract_relations(self, sentence1, sentence2, dialogue1, dialogue2):
         input = [{
