@@ -51,7 +51,6 @@ LongMemEval/merged/
 logs/
 
 # Local planning / generated analysis artifacts
-currentplan.md
 LongMemEval/*.query_matrix.json
 tmp/smoke_metrics_*.json
 slide_formula_snippets.aux

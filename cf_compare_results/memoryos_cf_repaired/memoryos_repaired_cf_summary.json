@@ -1,0 +1,22 @@
+{
+  "mapping_stats": {
+    "total_writes": 2580,
+    "type::memoryos_short_term": 300,
+    "mapped_writes": 567,
+    "mapped::memoryos_short_term": 300,
+    "type::memoryos_page": 280,
+    "mapped::memoryos_page": 267,
+    "type::memoryos_user_knowledge": 1000,
+    "type::memoryos_assistant_knowledge": 1000
+  },
+  "query_level_stats": {
+    "total_queries": 50,
+    "retrieval_correct_queries": 37
+  },
+  "write_level_stats": {
+    "retrieved_incorrect_dominant": 53,
+    "retrieved_incorrect_non_dominant": 87,
+    "retrieved_correct_non_dominant": 5,
+    "retrieved_correct_dominant": 5
+  }
+}
