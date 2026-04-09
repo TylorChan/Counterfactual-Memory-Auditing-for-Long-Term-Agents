@@ -19,10 +19,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from longmemeval_audit import (
     append_jsonl as append_audit_jsonl,
+    build_item_record,
     build_query_record,
     build_write_record,
     derive_audit_paths,
     make_write_id,
+    normalize_list as audit_normalize_list,
 )
 from longmemeval_counterfactual import (
     add_cf_args,
@@ -120,18 +122,29 @@ def parse_longmemeval_datetime(raw: str) -> Optional[datetime]:
         return None
 
 
-def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+def get_ordered_session_entries(
+    entry: Dict,
+    preserve_order: bool,
+) -> List[Tuple[str, str, List[Dict]]]:
     dates = entry.get("haystack_dates", [])
     sessions = entry.get("haystack_sessions", [])
-    pairs = [(d, s) for d, s in zip(dates, sessions)]
+    session_ids = entry.get("haystack_session_ids", [])
+    pairs = [
+        (
+            str(session_ids[idx]) if idx < len(session_ids) and session_ids[idx] else f"s{idx + 1}",
+            date_raw,
+            turns,
+        )
+        for idx, (date_raw, turns) in enumerate(zip(dates, sessions))
+    ]
 
     if preserve_order:
         return pairs
 
     indexed = []
-    for idx, (date_raw, turns) in enumerate(pairs):
+    for idx, (session_id, date_raw, turns) in enumerate(pairs):
         dt = parse_longmemeval_datetime(date_raw)
-        indexed.append((idx, dt, date_raw, turns))
+        indexed.append((idx, dt, session_id, date_raw, turns))
     indexed.sort(
         key=lambda x: (
             1 if x[1] is None else 0,
@@ -139,7 +152,11 @@ def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, L
             x[0],
         )
     )
-    return [(date_raw, turns) for _idx, _dt, date_raw, turns in indexed]
+    return [(session_id, date_raw, turns) for _idx, _dt, session_id, date_raw, turns in indexed]
+
+
+def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+    return [(date_raw, turns) for _session_id, date_raw, turns in get_ordered_session_entries(entry, preserve_order)]
 
 
 def iter_qa_pairs(turns: List[Dict]) -> Iterable[Tuple[str, str]]:
@@ -718,8 +735,8 @@ def answer_question(
 
 def collect_share_write_events(entry: Dict, preserve_session_order: bool, max_session_dialogue_chars: int) -> List[ShareWriteEvent]:
     events: List[ShareWriteEvent] = []
-    ordered_sessions = get_ordered_sessions(entry, preserve_session_order)
-    for session_idx, (date_raw, turns) in enumerate(ordered_sessions, start=1):
+    ordered_sessions = get_ordered_session_entries(entry, preserve_session_order)
+    for session_id, date_raw, turns in ordered_sessions:
         pairs = list(iter_qa_pairs(turns))
         if not pairs:
             continue
@@ -730,7 +747,7 @@ def collect_share_write_events(entry: Dict, preserve_session_order: bool, max_se
         events.append(
             build_share_session_event(
                 qid=entry["question_id"],
-                session_id=f"s{session_idx}",
+                session_id=session_id,
                 timestamp=date_raw,
                 dialogue_text=dialogue_text,
                 original_index=len(events),
@@ -749,7 +766,7 @@ def run_share_replay(
     qid = entry["question_id"]
     qtype = entry.get("question_type", "unknown")
     memory = ShareMemory()
-    memory_meta: Dict[Tuple[str, str], Dict[str, str]] = {}
+    memory_meta: Dict[Tuple[str, str], Dict[str, object]] = {}
     strict_extract_fallbacks = 0
     strict_update_fallbacks = 0
     strict_extract_text_fallbacks = 0
@@ -832,11 +849,21 @@ def run_share_replay(
         for bucket, item in iter_memory_bucket_items(memory):
             key = (bucket, item)
             if key in current_items or key not in previous_items:
-                memory_meta[key] = {"session_id": event.session_id, "timestamp": event.timestamp}
+                previous_meta = memory_meta.get(key, {})
+                memory_meta[key] = {
+                    "session_id": event.session_id,
+                    "timestamp": event.timestamp,
+                    "source_write_ids": audit_normalize_list(
+                        [*previous_meta.get("source_write_ids", []), event.write_id]
+                    ),
+                    "source_session_ids": audit_normalize_list(
+                        [*previous_meta.get("source_session_ids", []), event.session_id]
+                    ),
+                }
 
     original_pairs_by_session = {
-        f"s{idx}": list(iter_qa_pairs(turns))
-        for idx, (_date_raw, turns) in enumerate(get_ordered_sessions(entry, args.preserve_session_order), start=1)
+        session_id: list(iter_qa_pairs(turns))
+        for session_id, _date_raw, turns in get_ordered_session_entries(entry, args.preserve_session_order)
     }
     for event in replay_events:
         history_pairs.extend(original_pairs_by_session.get(event.session_id, []))
@@ -902,33 +929,61 @@ def run_share_replay(
     bridge_items: List[Dict] = []
     seen_selected = set()
     for item in selected:
-        matched_any = False
+        matched_meta: List[Dict[str, object]] = []
         for bucket, bucket_item in iter_memory_bucket_items(memory):
             if bucket_item != item:
                 continue
             meta = memory_meta.get((bucket, bucket_item), {})
-            event = event_lookup.get(meta.get("session_id", ""))
-            if event is None or event.write_id in seen_selected:
+            matched_meta.append(meta)
+        source_write_ids = audit_normalize_list(
+            write_id
+            for meta in matched_meta
+            for write_id in (meta.get("source_write_ids") or [])
+        )
+        if source_write_ids:
+            dedupe_key = tuple(source_write_ids)
+            if dedupe_key in seen_selected:
                 continue
-            matched_any = True
-            seen_selected.add(event.write_id)
-            item_record = {
-                "write_id": event.write_id,
-                "stage": "selected_memory",
-                "rank": len(prompt_items) + 1,
-                "score": None,
-                "timestamp": event.timestamp,
-                "write_type": "share_session_update",
-                "audit_eligible": True,
-            }
-            retrieved_write_ids.append(event.write_id)
-            selected_write_ids.append(event.write_id)
-            prompt_write_ids.append(event.write_id)
+            seen_selected.add(dedupe_key)
+            source_session_ids = audit_normalize_list(
+                session_id
+                for meta in matched_meta
+                for session_id in (meta.get("source_session_ids") or [])
+            )
+            timestamps = [
+                meta.get("timestamp")
+                for meta in matched_meta
+                if meta.get("timestamp")
+            ]
+            item_record = build_item_record(
+                write_id=source_write_ids[0] if len(source_write_ids) == 1 else None,
+                source_write_ids=source_write_ids,
+                source_session_ids=source_session_ids,
+                event_timestamps=timestamps,
+                memory_timestamps=timestamps,
+                stage="selected_memory",
+                rank=len(prompt_items) + 1,
+                score=None,
+                timestamp=timestamps[0] if timestamps else None,
+                write_type="share_session_update",
+                source_form="share_memory_summary",
+                audit_eligible=True,
+                text=item,
+                source="selected_memory",
+            )
+            retrieved_write_ids.extend(source_write_ids)
+            selected_write_ids.extend(source_write_ids)
+            prompt_write_ids.extend(source_write_ids)
             retrieved_items.append(dict(item_record))
             prompt_items.append(dict(item_record))
-        if not matched_any:
+        else:
             bridge_items.append(
-                {"text": item, "source": "share_selected_unmapped", "audit_eligible": False}
+                {
+                    "text": item,
+                    "source": "share_selected_unmapped",
+                    "source_form": "share_memory_summary",
+                    "audit_eligible": False,
+                }
             )
 
     query_record = build_query_record(

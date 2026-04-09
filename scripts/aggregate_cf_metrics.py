@@ -11,6 +11,21 @@ def load_jsonl(path: Path) -> List[Dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def survival_points(values: List[float]) -> List[Dict]:
+    if not values:
+        return []
+    ordered = sorted(float(value) for value in values)
+    total = len(ordered)
+    thresholds = sorted(set(ordered))
+    return [
+        {
+            "threshold_seconds": threshold,
+            "survival": sum(1 for value in ordered if value >= threshold) / total,
+        }
+        for threshold in thresholds
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("cf_query_jsonl", nargs="+")
@@ -28,6 +43,12 @@ def main() -> None:
     out: Dict[str, Dict] = {}
     for agent, agent_rows in by_agent.items():
         ginis = [float(row.get("rollback_gini") or 0.0) for row in agent_rows]
+        answer_flip_rates = [float(row.get("rollback_answer_flip_rate") or 0.0) for row in agent_rows]
+        abstention_flip_rates = [float(row.get("rollback_abstention_flip_rate") or 0.0) for row in agent_rows]
+        answer_distances = [float(row.get("rollback_mean_answer_distance") or 0.0) for row in agent_rows]
+        fragility_flags = [1.0 if row.get("query_fragile") else 0.0 for row in agent_rows]
+        retrieved_coverages = [float(row.get("retrieved_item_coverage") or 0.0) for row in agent_rows]
+        prompt_coverages = [float(row.get("prompt_item_coverage") or 0.0) for row in agent_rows]
         etdls = [float(row["etdl_seconds"]) for row in agent_rows if row.get("etdl_seconds") is not None]
         confusion = {
             "retrieved_correct_dominant": 0,
@@ -35,15 +56,41 @@ def main() -> None:
             "retrieved_incorrect_dominant": 0,
             "retrieved_incorrect_non_dominant": 0,
         }
+        dominance_label_counts = {
+            "gold_dominant": 0,
+            "non_gold_dominant": 0,
+            "ambiguous": 0,
+            "no_effect": 0,
+        }
+        consistency_issue_counts: Dict[str, int] = {}
         for row in agent_rows:
             for key, value in (row.get("confusion_matrix") or {}).items():
                 confusion[key] = confusion.get(key, 0) + int(value)
+            label = str(row.get("query_dominance_label") or "")
+            if label in dominance_label_counts:
+                dominance_label_counts[label] += 1
+            for issue in (row.get("consistency_issues") or []):
+                issue_name = str(issue)
+                consistency_issue_counts[issue_name] = consistency_issue_counts.get(issue_name, 0) + 1
         out[agent] = {
             "n_queries": len(agent_rows),
+            "answer_flip_rate_mean": mean(answer_flip_rates) if answer_flip_rates else 0.0,
+            "query_fragility_rate": mean(fragility_flags) if fragility_flags else 0.0,
+            "abstention_flip_rate_mean": mean(abstention_flip_rates) if abstention_flip_rates else 0.0,
+            "mean_answer_distance": mean(answer_distances) if answer_distances else 0.0,
             "rollback_gini_mean": mean(ginis) if ginis else 0.0,
             "rollback_gini_median": median(ginis) if ginis else 0.0,
+            "retrieved_item_coverage_mean": mean(retrieved_coverages) if retrieved_coverages else 0.0,
+            "prompt_item_coverage_mean": mean(prompt_coverages) if prompt_coverages else 0.0,
+            "etdl_count": len(etdls),
+            "etdl_mean_seconds": mean(etdls) if etdls else None,
+            "etdl_median_seconds": median(etdls) if etdls else None,
+            "etdl_max_seconds": max(etdls) if etdls else None,
             "etdl_seconds": etdls,
+            "etdl_survival_curve": survival_points(etdls),
             "confusion_matrix": confusion,
+            "dominance_label_counts": dominance_label_counts,
+            "consistency_issue_counts": consistency_issue_counts,
         }
 
     out_path = Path(args.out_json)

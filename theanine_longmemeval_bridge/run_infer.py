@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import random
+import re
 import shutil
 import sys
 import time
@@ -18,10 +19,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from longmemeval_audit import (
     append_jsonl as append_audit_jsonl,
+    build_item_record,
     build_query_record,
     build_write_record,
     derive_audit_paths,
     make_write_id,
+    normalize_list,
 )
 from longmemeval_counterfactual import (
     add_cf_args,
@@ -38,6 +41,58 @@ SESSION_NAMES = ["first", "second", "third", "fourth", "fifth"]
 
 class TheanineWriteEvent(dict):
     pass
+
+
+def _normalize_theanine_text(text: object) -> str:
+    return " ".join(str(text or "").split()).strip()
+
+
+def _extract_theanine_summary_segments(text: object) -> List[str]:
+    raw = str(text or "")
+    bracketed = [
+        _normalize_theanine_text(match)
+        for match in re.findall(r"\[([^\]]+)\]", raw)
+        if _normalize_theanine_text(match)
+    ]
+    if bracketed:
+        return bracketed
+    return [_normalize_theanine_text(raw)] if _normalize_theanine_text(raw) else []
+
+
+def _lookup_theanine_source_matches(
+    text: object,
+    text_to_records: Dict[str, List[Tuple[str, Dict]]],
+) -> List[Tuple[str, Dict]]:
+    normalized_text = _normalize_theanine_text(text)
+    if not normalized_text:
+        return []
+    direct = text_to_records.get(normalized_text, [])
+    if direct:
+        return direct
+
+    aggregated: List[Tuple[str, Dict]] = []
+    seen = set()
+    for segment in _extract_theanine_summary_segments(text):
+        for write_id, item_record in text_to_records.get(segment, []):
+            key = (write_id, item_record.get("timestamp"), item_record.get("session_id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            aggregated.append((write_id, item_record))
+    return aggregated
+
+
+def _lookup_theanine_source_write_ids(text: object, text_to_write_ids: Dict[str, List[str]]) -> List[str]:
+    normalized_text = _normalize_theanine_text(text)
+    if not normalized_text:
+        return []
+    direct = normalize_list(text_to_write_ids.get(normalized_text, []))
+    if direct:
+        return direct
+    source_write_ids: List[str] = []
+    for segment in _extract_theanine_summary_segments(text):
+        source_write_ids.extend(text_to_write_ids.get(segment, []))
+    return normalize_list(source_write_ids)
 
 
 def session_field_prefix(session_num: int) -> str:
@@ -156,7 +211,7 @@ def ensure_openai_config(config_root: Path, api_key: str) -> Path:
     conf_dir = config_root / "conf.d"
     conf_dir.mkdir(parents=True, exist_ok=True)
     config_path = conf_dir / "config.yaml"
-    config_path.write_text(f"openai:\n  key: {api_key}\n", encoding="utf-8")
+    config_path.write_text("openai:\n  key: ${OPENAI_API_KEY}\n", encoding="utf-8")
     return config_path
 
 
@@ -507,29 +562,83 @@ def build_theanine_audit_records(entry: Dict, trace: Dict, hypothesis: str) -> T
     prompt_items: List[Dict] = []
     bridge_items: List[Dict] = []
     seen_ids = set()
+    before_source_write_ids: List[str] = []
+    before_source_session_ids: List[str] = []
+    before_source_timestamps: List[str] = []
 
     for item in trace.get("before_refinement") or []:
-        norm_text = " ".join(str(item).split()).strip()
-        matches = text_to_ids.get(norm_text, [])
+        matches = _lookup_theanine_source_matches(item, text_to_ids)
         if not matches:
             bridge_items.append(
                 {"text": item, "source": "theanine_before_refinement_unmapped", "audit_eligible": False}
             )
             continue
-        for write_id, item_record in matches:
-            if write_id in seen_ids:
-                continue
-            seen_ids.add(write_id)
-            retrieved_write_ids.append(write_id)
-            selected_write_ids.append(write_id)
-            prompt_write_ids.append(write_id)
-            retrieved_items.append(dict(item_record))
-            prompt_items.append(dict(item_record))
+        source_write_ids = normalize_list(write_id for write_id, _ in matches)
+        source_session_ids = normalize_list(item_record.get("session_id") for _write_id, item_record in matches)
+        source_timestamps = [
+            item_record.get("timestamp")
+            for _write_id, item_record in matches
+            if item_record.get("timestamp")
+        ]
+        dedupe_key = ("before_refinement", tuple(source_write_ids))
+        if dedupe_key in seen_ids:
+            continue
+        seen_ids.add(dedupe_key)
+        before_source_write_ids.extend(source_write_ids)
+        before_source_session_ids.extend(source_session_ids)
+        before_source_timestamps.extend(source_timestamps)
+        retrieved_write_ids.extend(source_write_ids)
+        selected_write_ids.extend(source_write_ids)
+        prompt_write_ids.extend(source_write_ids)
+        item_record = build_item_record(
+            write_id=source_write_ids[0] if len(source_write_ids) == 1 else None,
+            source_write_ids=source_write_ids,
+            source_session_ids=source_session_ids,
+            event_timestamps=source_timestamps,
+            memory_timestamps=source_timestamps,
+            stage="before_refinement",
+            rank=len(prompt_items) + 1,
+            score=None,
+            timestamp=source_timestamps[0] if source_timestamps else None,
+            write_type="theanine_summary_node",
+            source_form="theanine_before_refinement",
+            audit_eligible=True,
+            text=str(item),
+            source="before_refinement",
+        )
+        retrieved_items.append(dict(item_record))
+        prompt_items.append(dict(item_record))
 
     for item in trace.get("after_refinement") or []:
-        bridge_items.append(
-            {"text": item, "source": "theanine_after_refinement", "audit_eligible": False}
-        )
+        if before_source_write_ids:
+            item_record = build_item_record(
+                write_id=before_source_write_ids[0] if len(normalize_list(before_source_write_ids)) == 1 else None,
+                source_write_ids=before_source_write_ids,
+                source_session_ids=before_source_session_ids,
+                event_timestamps=before_source_timestamps,
+                memory_timestamps=[trace.get("question_date_used")] if trace.get("question_date_used") else before_source_timestamps,
+                stage="after_refinement",
+                rank=len(prompt_items) + 1,
+                score=None,
+                timestamp=trace.get("question_date_used"),
+                write_type="theanine_summary_node",
+                source_form="theanine_after_refinement",
+                audit_eligible=True,
+                text=str(item),
+                source="after_refinement",
+                extra={"parent_write_ids": normalize_list(before_source_write_ids)},
+            )
+            retrieved_items.append(dict(item_record))
+            prompt_items.append(dict(item_record))
+        else:
+            bridge_items.append(
+                {
+                    "text": item,
+                    "source": "theanine_after_refinement",
+                    "source_form": "theanine_after_refinement",
+                    "audit_eligible": False,
+                }
+            )
 
     query_record = build_query_record(
         agent="theanine",
@@ -607,29 +716,87 @@ def build_theanine_replay_audit(
     prompt_write_ids: List[str] = []
     retrieved_items: List[Dict] = []
     prompt_items: List[Dict] = []
+    bridge_items: List[Dict] = []
     seen = set()
+    before_source_write_ids: List[str] = []
+    before_source_timestamps: List[str] = []
     for item in trace.get("before_refinement") or []:
-        text = " ".join(str(item).split()).strip()
+        text = _normalize_theanine_text(item)
         if not text:
             continue
-        for write_id in text_to_write_ids.get(text, []):
-            if write_id in seen:
-                continue
-            seen.add(write_id)
-            item_record = {
-                "write_id": write_id,
-                "stage": "before_refinement",
-                "rank": len(prompt_items) + 1,
-                "score": None,
-                "timestamp": next((record["timestamp"] for record in write_records if record["write_id"] == write_id), None),
-                "write_type": "theanine_session_ingress",
-                "audit_eligible": True,
-            }
-            retrieved_write_ids.append(write_id)
-            selected_write_ids.append(write_id)
-            prompt_write_ids.append(write_id)
+        source_write_ids = _lookup_theanine_source_write_ids(item, text_to_write_ids)
+        if not source_write_ids:
+            bridge_items.append(
+                {
+                    "text": item,
+                    "source": "theanine_before_refinement_unmapped",
+                    "source_form": "theanine_before_refinement",
+                    "audit_eligible": False,
+                }
+            )
+            continue
+        dedupe_key = ("before_refinement", tuple(source_write_ids))
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        source_timestamps = [
+            record["timestamp"]
+            for record in write_records
+            if record["write_id"] in set(source_write_ids) and record.get("timestamp")
+        ]
+        before_source_write_ids.extend(source_write_ids)
+        before_source_timestamps.extend(source_timestamps)
+        item_record = build_item_record(
+            write_id=source_write_ids[0] if len(source_write_ids) == 1 else None,
+            source_write_ids=source_write_ids,
+            source_session_ids=[],
+            event_timestamps=source_timestamps,
+            memory_timestamps=source_timestamps,
+            stage="before_refinement",
+            rank=len(prompt_items) + 1,
+            score=None,
+            timestamp=source_timestamps[0] if source_timestamps else None,
+            write_type="theanine_session_ingress",
+            source_form="theanine_before_refinement",
+            audit_eligible=True,
+            text=text,
+            source="before_refinement",
+        )
+        retrieved_write_ids.extend(source_write_ids)
+        selected_write_ids.extend(source_write_ids)
+        prompt_write_ids.extend(source_write_ids)
+        retrieved_items.append(dict(item_record))
+        prompt_items.append(dict(item_record))
+    for item in trace.get("after_refinement") or []:
+        if before_source_write_ids:
+            item_record = build_item_record(
+                write_id=before_source_write_ids[0] if len(normalize_list(before_source_write_ids)) == 1 else None,
+                source_write_ids=before_source_write_ids,
+                source_session_ids=[],
+                event_timestamps=before_source_timestamps,
+                memory_timestamps=[trace.get("question_date_used")] if trace.get("question_date_used") else before_source_timestamps,
+                stage="after_refinement",
+                rank=len(prompt_items) + 1,
+                score=None,
+                timestamp=trace.get("question_date_used"),
+                write_type="theanine_session_ingress",
+                source_form="theanine_after_refinement",
+                audit_eligible=True,
+                text=str(item),
+                source="after_refinement",
+                extra={"parent_write_ids": normalize_list(before_source_write_ids)},
+            )
             retrieved_items.append(dict(item_record))
             prompt_items.append(dict(item_record))
+        else:
+            bridge_items.append(
+                {
+                    "text": item,
+                    "source": "theanine_after_refinement",
+                    "source_form": "theanine_after_refinement",
+                    "audit_eligible": False,
+                }
+            )
     query_record = build_query_record(
         agent="theanine",
         question_id=entry["question_id"],
@@ -643,7 +810,7 @@ def build_theanine_replay_audit(
         prompt_write_ids=prompt_write_ids,
         retrieved_items=retrieved_items,
         prompt_items=prompt_items,
-        bridge_items=[],
+        bridge_items=bridge_items,
         extra={
             "history_sessions_requested": trace.get("history_sessions_requested"),
             "history_sessions_used": trace.get("history_sessions_used"),

@@ -21,10 +21,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from longmemeval_audit import (
     append_jsonl as append_audit_jsonl,
+    build_item_record,
     build_query_record,
     build_write_record,
     derive_audit_paths,
     make_write_id,
+    normalize_list,
 )
 from longmemeval_counterfactual import (
     add_cf_args,
@@ -146,16 +148,27 @@ def to_unix_seconds(raw: str, fallback: float) -> float:
     return parsed.timestamp()
 
 
-def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+def get_ordered_session_entries(
+    entry: Dict,
+    preserve_order: bool,
+) -> List[Tuple[str, str, List[Dict]]]:
     dates = entry.get("haystack_dates", [])
     sessions = entry.get("haystack_sessions", [])
-    pairs = [(d, s) for d, s in zip(dates, sessions)]
+    session_ids = entry.get("haystack_session_ids", [])
+    pairs = [
+        (
+            str(session_ids[idx]) if idx < len(session_ids) and session_ids[idx] else f"s{idx + 1}",
+            date_raw,
+            turns,
+        )
+        for idx, (date_raw, turns) in enumerate(zip(dates, sessions))
+    ]
 
     if not preserve_order:
         indexed = []
-        for idx, (date_raw, turns) in enumerate(pairs):
+        for idx, (session_id, date_raw, turns) in enumerate(pairs):
             dt = parse_longmemeval_datetime(date_raw)
-            indexed.append((idx, dt, date_raw, turns))
+            indexed.append((idx, dt, session_id, date_raw, turns))
         indexed.sort(
             key=lambda item: (
                 1 if item[1] is None else 0,
@@ -163,9 +176,13 @@ def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, L
                 item[0],
             )
         )
-        return [(date_raw, turns) for _idx, _dt, date_raw, turns in indexed]
+        return [(session_id, date_raw, turns) for _idx, _dt, session_id, date_raw, turns in indexed]
 
     return pairs
+
+
+def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+    return [(date_raw, turns) for _session_id, date_raw, turns in get_ordered_session_entries(entry, preserve_order)]
 
 
 def iter_qa_pairs(turns: List[Dict]) -> Iterable[Tuple[str, str]]:
@@ -586,10 +603,7 @@ def force_flush_short_term_memory(event_memory) -> int:
 def collect_ldagent_write_events(entry: Dict, preserve_session_order: bool) -> List[Dict]:
     events: List[Dict] = []
     pair_idx = 0
-    for session_idx, (session_date, session_turns) in enumerate(
-        get_ordered_sessions(entry, preserve_session_order),
-        start=1,
-    ):
+    for session_id, session_date, session_turns in get_ordered_session_entries(entry, preserve_session_order):
         session_ts = to_unix_seconds(session_date, fallback=time.time())
         for user_input, agent_response in iter_qa_pairs(session_turns):
             pair_idx += 1
@@ -600,11 +614,11 @@ def collect_ldagent_write_events(entry: Dict, preserve_session_order: bool) -> L
                         question_id=entry["question_id"],
                         write_type="ldagent_dialogue_turn",
                         content=f"SPEAKER_1: {user_input}\nSPEAKER_2: {agent_response}",
-                        session_id=f"s{session_idx}",
+                        session_id=session_id,
                         turn_span=[pair_idx],
                         timestamp=session_ts,
                     ),
-                    "session_id": f"s{session_idx}",
+                    "session_id": session_id,
                     "turn_span": [pair_idx],
                     "timestamp": session_ts,
                     "user_input": user_input,
@@ -766,10 +780,12 @@ def run_ldagent_replay(
 
     write_records = build_ldagent_event_write_records(qid, events)
     candidate_write_ids = [record["write_id"] for record in write_records]
+    write_record_by_id = {record["write_id"]: record for record in write_records}
     retrieved_items: List[Dict] = []
     prompt_items: List[Dict] = []
     retrieved_write_ids: List[str] = []
     prompt_write_ids: List[str] = []
+    bridge_items: List[Dict] = []
     seen_ids = set()
     for stage_name, memories in (
         ("answer_context", retrieval_for_answer.context_memories),
@@ -782,23 +798,51 @@ def run_ldagent_replay(
                 mapped_ids = [event_id_by_idx[idx]]
             elif idx in long_term_lineage_by_idx:
                 mapped_ids = list(long_term_lineage_by_idx[idx])
-            for write_id in mapped_ids:
-                if write_id in seen_ids:
-                    continue
-                seen_ids.add(write_id)
-                item_record = {
-                    "write_id": write_id,
-                    "stage": stage_name,
-                    "rank": len(prompt_items) + 1,
-                    "score": item.get("score"),
-                    "timestamp": None if item.get("time") is None else str(item.get("time")),
-                    "write_type": "ldagent_dialogue_turn",
-                    "audit_eligible": True,
-                }
-                retrieved_items.append(dict(item_record))
-                prompt_items.append(dict(item_record))
-                retrieved_write_ids.append(write_id)
-                prompt_write_ids.append(write_id)
+            mapped_ids = normalize_list(mapped_ids)
+            evidence_text = item.get("dialog") or item.get("summary") or item.get("text")
+            if not mapped_ids:
+                bridge_items.append(
+                    {
+                        "text": evidence_text,
+                        "source": stage_name,
+                        "source_form": "ldagent_summary",
+                        "audit_eligible": False,
+                    }
+                )
+                continue
+            dedupe_key = (stage_name, tuple(mapped_ids))
+            if dedupe_key in seen_ids:
+                continue
+            seen_ids.add(dedupe_key)
+            source_session_ids = normalize_list(
+                write_record_by_id.get(write_id, {}).get("session_id") for write_id in mapped_ids
+            )
+            event_timestamps = [
+                write_record_by_id.get(write_id, {}).get("timestamp")
+                for write_id in mapped_ids
+                if write_record_by_id.get(write_id, {}).get("timestamp")
+            ]
+            source_form = "ldagent_raw_dialog" if len(mapped_ids) == 1 else "ldagent_summary"
+            item_record = build_item_record(
+                write_id=mapped_ids[0] if len(mapped_ids) == 1 else None,
+                source_write_ids=mapped_ids,
+                source_session_ids=source_session_ids,
+                event_timestamps=event_timestamps,
+                memory_timestamps=[item.get("time")] if item.get("time") is not None else event_timestamps,
+                stage=stage_name,
+                rank=len(prompt_items) + 1,
+                score=item.get("score"),
+                timestamp=item.get("time"),
+                write_type="ldagent_dialogue_turn",
+                source_form=source_form,
+                audit_eligible=True,
+                text=evidence_text,
+                source=stage_name,
+            )
+            retrieved_items.append(dict(item_record))
+            prompt_items.append(dict(item_record))
+            retrieved_write_ids.extend(mapped_ids)
+            prompt_write_ids.extend(mapped_ids)
 
     query_record = build_query_record(
         agent="ldagent",
@@ -813,7 +857,7 @@ def run_ldagent_replay(
         prompt_write_ids=prompt_write_ids,
         retrieved_items=retrieved_items,
         prompt_items=prompt_items,
-        bridge_items=[],
+        bridge_items=bridge_items,
         extra={
             "query_used": final_query,
             "session_gap_seconds": args.session_gap_seconds,

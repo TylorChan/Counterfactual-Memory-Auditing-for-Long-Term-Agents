@@ -21,7 +21,8 @@ CF_TARGET_SCOPE="${12}"
 CF_MAX_WRITES="${13}"
 CF_DOMINANCE_THRESHOLD="${14}"
 
-source "${HOME}/miniconda3/etc/profile.d/conda.sh"
+source "${WORKDIR}/scripts/conda_bootstrap.sh"
+source_conda_sh
 export ANONYMIZED_TELEMETRY=False
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
-TRACE_VERSION = "audit_v1"
+TRACE_VERSION = "audit_v2"
 
 
 def append_jsonl(path: Optional[Path], obj: Dict) -> None:
@@ -29,6 +29,20 @@ def derive_audit_paths(trace_path: Optional[Path]) -> Tuple[Optional[Path], Opti
 
 
 def normalize_list(items: Optional[Iterable[str]]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+    for item in items or []:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def normalize_scalar_list(items: Optional[Iterable[object]]) -> List[str]:
     out: List[str] = []
     seen = set()
     for item in items or []:
@@ -111,6 +125,106 @@ def build_write_record(
     }
 
 
+def normalize_item_record(item: Dict) -> Dict:
+    record = dict(item or {})
+    write_id_raw = record.get("write_id")
+    write_id = str(write_id_raw).strip() if write_id_raw is not None else ""
+    if not write_id:
+        write_id = None
+
+    source_write_ids = normalize_list(
+        record.get("source_write_ids") or ([write_id] if write_id else [])
+    )
+    source_session_ids = normalize_list(record.get("source_session_ids"))
+
+    timestamp = record.get("timestamp")
+    default_timestamps = [timestamp] if timestamp is not None else []
+    event_timestamps = normalize_scalar_list(record.get("event_timestamps") or default_timestamps)
+    memory_timestamps = normalize_scalar_list(record.get("memory_timestamps") or default_timestamps)
+
+    normalized = {
+        "write_id": write_id,
+        "source_write_ids": source_write_ids,
+        "source_session_ids": source_session_ids,
+        "event_timestamps": event_timestamps,
+        "memory_timestamps": memory_timestamps,
+        "stage": record.get("stage"),
+        "rank": record.get("rank"),
+        "score": record.get("score"),
+        "timestamp": None if timestamp is None else str(timestamp),
+        "write_type": record.get("write_type"),
+        "source_form": record.get("source_form")
+        or record.get("write_type")
+        or record.get("source")
+        or record.get("stage")
+        or "unknown",
+        "audit_eligible": bool(record.get("audit_eligible", bool(source_write_ids or write_id))),
+    }
+
+    for optional_key in (
+        "text",
+        "source",
+        "parent_write_ids",
+        "parent_summary_node_ids",
+        "session_id",
+        "turn_span",
+        "bucket_name",
+        "query_text",
+    ):
+        if optional_key in record:
+            value = record.get(optional_key)
+            if optional_key in {"parent_write_ids"}:
+                normalized[optional_key] = normalize_list(value)
+            elif optional_key in {"parent_summary_node_ids", "turn_span"}:
+                normalized[optional_key] = list(value or [])
+            else:
+                normalized[optional_key] = value
+
+    for key, value in record.items():
+        if key not in normalized:
+            normalized[key] = value
+    return normalized
+
+
+def build_item_record(
+    *,
+    stage: str,
+    rank: Optional[int],
+    score: Optional[object],
+    timestamp: Optional[object],
+    write_type: Optional[str],
+    write_id: Optional[str] = None,
+    source_write_ids: Optional[Iterable[str]] = None,
+    source_session_ids: Optional[Iterable[str]] = None,
+    event_timestamps: Optional[Iterable[object]] = None,
+    memory_timestamps: Optional[Iterable[object]] = None,
+    source_form: Optional[str] = None,
+    audit_eligible: bool = True,
+    text: Optional[str] = None,
+    source: Optional[str] = None,
+    extra: Optional[Dict] = None,
+) -> Dict:
+    record = {
+        "write_id": write_id,
+        "source_write_ids": list(source_write_ids or []),
+        "source_session_ids": list(source_session_ids or []),
+        "event_timestamps": list(event_timestamps or []),
+        "memory_timestamps": list(memory_timestamps or []),
+        "stage": stage,
+        "rank": rank,
+        "score": score,
+        "timestamp": None if timestamp is None else str(timestamp),
+        "write_type": write_type,
+        "source_form": source_form,
+        "audit_eligible": audit_eligible,
+        "text": text,
+        "source": source,
+    }
+    if extra:
+        record.update(extra)
+    return normalize_item_record(record)
+
+
 def build_query_record(
     *,
     agent: str,
@@ -135,15 +249,19 @@ def build_query_record(
         "question_id": question_id,
         "question_type": question_type,
         "query_time": None if query_time is None else str(query_time),
+        "question_date": None if query_time is None else str(query_time),
         "question_date_used": None if question_date_used is None else str(question_date_used),
+        "baseline_query_timestamp": None
+        if question_date_used is None and query_time is None
+        else str(question_date_used if question_date_used is not None else query_time),
         "baseline_answer": baseline_answer,
         "candidate_write_ids": normalize_list(candidate_write_ids),
         "retrieved_write_ids": normalize_list(retrieved_write_ids),
         "selected_write_ids": normalize_list(selected_write_ids),
         "prompt_write_ids": normalize_list(prompt_write_ids),
-        "retrieved_items": retrieved_items or [],
-        "prompt_items": prompt_items or [],
-        "bridge_items": bridge_items or [],
+        "retrieved_items": [normalize_item_record(item) for item in (retrieved_items or [])],
+        "prompt_items": [normalize_item_record(item) for item in (prompt_items or [])],
+        "bridge_items": [normalize_item_record(item) for item in (bridge_items or [])],
     }
     if extra:
         record.update(extra)

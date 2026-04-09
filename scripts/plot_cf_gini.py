@@ -96,10 +96,13 @@ def main() -> None:
             x="agent",
             y="rollback_gini",
             order=order,
-            palette=[colors[a] for a in order],
             width=0.48,
             fliersize=0,
             linewidth=1.25,
+            boxprops={"facecolor": "none", "edgecolor": "black", "linewidth": 1.6},
+            whiskerprops={"color": "black", "linewidth": 1.25},
+            capprops={"color": "black", "linewidth": 1.25},
+            medianprops={"color": "black", "linewidth": 1.6},
             ax=ax,
         )
         sns.stripplot(
@@ -108,9 +111,12 @@ def main() -> None:
             y="rollback_gini",
             order=order,
             palette=[colors[a] for a in order],
-            size=5,
+            size=5.5,
             jitter=0.18,
-            alpha=0.55,
+            alpha=0.75,
+            edgecolor="white",
+            linewidth=0.4,
+            zorder=3,
             ax=ax,
         )
     else:
@@ -123,9 +129,10 @@ def main() -> None:
             showfliers=False,
         )
         for patch, agent in zip(bp["boxes"], order):
-            patch.set_facecolor(colors[agent])
-            patch.set_alpha(0.45)
+            patch.set_facecolor("none")
+            patch.set_alpha(1.0)
             patch.set_edgecolor("black")
+            patch.set_linewidth(1.6)
         for median in bp["medians"]:
             median.set_color("black")
             median.set_linewidth(1.5)
@@ -133,13 +140,22 @@ def main() -> None:
         for idx, agent in enumerate(order):
             vals = df.loc[df["agent"] == agent, "rollback_gini"].astype(float).tolist()
             xs = [idx + rng.uniform(-0.12, 0.12) for _ in vals]
-            ax.scatter(xs, vals, s=24, alpha=0.55, color=colors[agent], edgecolors="none")
+            ax.scatter(
+                xs,
+                vals,
+                s=28,
+                alpha=0.75,
+                color=colors[agent],
+                edgecolors="white",
+                linewidths=0.4,
+                zorder=3,
+            )
         ax.set_xticks(range(len(order)))
         ax.set_xticklabels(order)
 
-    ax.set_title("Do A Few Memories Dominate the Answer?", fontsize=15, pad=12)
+    ax.set_title("", fontsize=15, pad=12)
     ax.set_xlabel("")
-    ax.set_ylabel("Rollback Gini Coefficient", fontsize=12)
+    ax.set_ylabel("Write-Ablation Gini Coefficient", fontsize=12)
     ax.set_ylim(0, max(0.4, float(df["rollback_gini"].max()) + 0.03))
     ax.grid(axis="y", linestyle="--", linewidth=0.6, alpha=0.45)
     ax.set_axisbelow(True)

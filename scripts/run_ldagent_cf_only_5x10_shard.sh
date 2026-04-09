@@ -20,7 +20,8 @@ CF_TARGET_SCOPE="${11}"
 CF_MAX_WRITES="${12}"
 CF_DOMINANCE_THRESHOLD="${13}"
 
-source "${HOME}/miniconda3/etc/profile.d/conda.sh"
+source "${WORKDIR}/scripts/conda_bootstrap.sh"
+source_conda_sh
 conda activate ld-lme
 
 export ANONYMIZED_TELEMETRY=False

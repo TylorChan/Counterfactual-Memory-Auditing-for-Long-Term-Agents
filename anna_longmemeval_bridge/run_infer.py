@@ -20,10 +20,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from longmemeval_audit import (
     append_jsonl as append_audit_jsonl,
+    build_item_record,
     build_query_record,
     build_write_record,
     derive_audit_paths,
     make_write_id,
+    normalize_list,
 )
 from longmemeval_counterfactual import (
     add_cf_args,
@@ -93,18 +95,30 @@ def parse_longmemeval_datetime(raw: str) -> Optional[datetime]:
         return None
 
 
-def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+def get_ordered_session_entries(
+    entry: Dict,
+    preserve_order: bool,
+) -> List[Tuple[int, str, str, List[Dict]]]:
     dates = entry.get("haystack_dates", [])
     sessions = entry.get("haystack_sessions", [])
-    pairs = [(d, s) for d, s in zip(dates, sessions)]
+    session_ids = entry.get("haystack_session_ids", [])
+    pairs = [
+        (
+            idx + 1,
+            str(session_ids[idx]) if idx < len(session_ids) and session_ids[idx] else f"s{idx + 1}",
+            date_raw,
+            turns,
+        )
+        for idx, (date_raw, turns) in enumerate(zip(dates, sessions))
+    ]
 
     if preserve_order:
         return pairs
 
     indexed = []
-    for idx, (date_raw, turns) in enumerate(pairs):
+    for session_order, session_id, date_raw, turns in pairs:
         dt = parse_longmemeval_datetime(date_raw)
-        indexed.append((idx, dt, date_raw, turns))
+        indexed.append((session_order, dt, session_id, date_raw, turns))
     indexed.sort(
         key=lambda x: (
             1 if x[1] is None else 0,
@@ -112,7 +126,11 @@ def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, L
             x[0],
         )
     )
-    return [(date_raw, turns) for _idx, _dt, date_raw, turns in indexed]
+    return [(session_order, session_id, date_raw, turns) for session_order, _dt, session_id, date_raw, turns in indexed]
+
+
+def get_ordered_sessions(entry: Dict, preserve_order: bool) -> List[Tuple[str, List[Dict]]]:
+    return [(date_raw, turns) for _order, _session_id, date_raw, turns in get_ordered_session_entries(entry, preserve_order)]
 
 
 def iter_qa_pairs(turns: List[Dict]) -> Iterable[Tuple[str, str]]:
@@ -182,6 +200,7 @@ class MemoryUnit:
     session_id: str
     timestamp: str
     turn_span: List[object]
+    session_order: int
 
 
 @dataclass
@@ -491,12 +510,11 @@ def build_memory_views(
     session_units: List[List[MemoryUnit]] = []
     pair_count = 0
 
-    for session_idx, (date_raw, turns) in enumerate(get_ordered_sessions(entry, preserve_order), start=1):
+    for session_order, session_id, date_raw, turns in get_ordered_session_entries(entry, preserve_order):
         current_session_conversations: List[Dict] = []
         current_session_lines: List[str] = []
         current_session_units: List[MemoryUnit] = []
         line_idx = 0
-        session_id = f"s{session_idx}"
         for user_turn, assistant_turn in iter_qa_pairs(turns):
             if user_turn.strip():
                 line_idx += 1
@@ -514,6 +532,7 @@ def build_memory_views(
                         session_id=session_id,
                         timestamp=date_raw,
                         turn_span=[line_idx],
+                        session_order=session_order,
                     )
                 )
             if assistant_turn.strip():
@@ -532,6 +551,7 @@ def build_memory_views(
                         session_id=session_id,
                         timestamp=date_raw,
                         turn_span=[line_idx],
+                        session_order=session_order,
                     )
                 )
             pair_count += 1
@@ -594,9 +614,8 @@ def collect_anna_write_events(entry: Dict, preserve_order: bool) -> List[MemoryU
 
 def sort_anna_units(units: Iterable[MemoryUnit]) -> List[MemoryUnit]:
     def sort_key(unit: MemoryUnit):
-        session_num = int(unit.session_id[1:]) if unit.session_id.startswith("s") else 0
         turn = int(unit.turn_span[0]) if unit.turn_span else 0
-        return (session_num, turn)
+        return (unit.session_order, turn)
 
     return sorted(list(units), key=sort_key)
 
@@ -657,6 +676,7 @@ def apply_anna_cf_spec(qid: str, units: Iterable[MemoryUnit], spec) -> Tuple[Lis
                 session_id=unit.session_id,
                 timestamp=spec.new_timestamp or unit.timestamp,
                 turn_span=list(unit.turn_span),
+                session_order=unit.session_order,
             )
         )
         target_timestamp = spec.new_timestamp or unit.timestamp
@@ -672,7 +692,7 @@ def build_memory_views_from_units(
     for unit in sort_anna_units(units):
         grouped.setdefault(unit.session_id, []).append(unit)
 
-    session_ids = sorted(grouped.keys(), key=lambda sid: int(sid[1:]) if sid.startswith("s") else 0)
+    session_ids = sorted(grouped.keys(), key=lambda sid: min(unit.session_order for unit in grouped[sid]))
     session_lines = [[unit.text for unit in grouped[sid]] for sid in session_ids]
     session_units = [grouped[sid] for sid in session_ids]
     session_conversations: List[List[Dict]] = []
@@ -792,13 +812,23 @@ def run_anna_replay(
         memory_views.short_term_lines,
         args.report_summary_lines,
     )
-    retrieval = retriever.query(
+    fallback_source = memory_views.long_term_lines or memory_views.short_term_lines
+    fallback_memories = lexical_retrieve(
+        question=question,
+        items=fallback_source,
+        top_k=args.fallback_top_k,
+    )
+    retrieval = retriever.retrieve(
         question=question,
         previous_conversations=memory_views.long_term_conversations,
-        report_payload=report,
-        fallback_lines=memory_views.long_term_lines,
-        fallback_top_k=args.fallback_top_k,
-        disable_need_check=args.disable_need_check,
+        report=report,
+        use_need_check=not args.disable_need_check,
+        fallback_memories=fallback_memories,
+        question_type=qtype,
+        question_date=str(entry.get("question_date", "")),
+        long_term_lines=memory_views.long_term_lines,
+        short_term_lines=memory_views.short_term_lines,
+        enable_full_tertiary_init=args.enable_full_tertiary_init,
     )
     short_term_source = memory_views.short_term_lines or memory_views.all_lines
     short_term = short_term_source[-args.short_term_window :] if args.short_term_window > 0 else short_term_source
@@ -838,6 +868,9 @@ def run_anna_replay(
         unit_index.setdefault(unit.text, []).append((unit, "anna_memory_unit"))
 
     seen_retrieved = set()
+    matched_long_term_ids: List[str] = []
+    matched_long_term_sessions: List[str] = []
+    matched_long_term_timestamps: List[str] = []
     for unit in map_anna_retrieved_units(retrieval.retrieved_text, memory_views.long_term_units):
         write_id = make_write_id(
             agent="anna",
@@ -851,31 +884,34 @@ def run_anna_replay(
         if write_id in seen_retrieved:
             continue
         seen_retrieved.add(write_id)
-        retrieved_write_ids.append(write_id)
-        prompt_write_ids.append(write_id)
-        selected_write_ids.append(write_id)
-        retrieved_items.append(
-            {
-                "write_id": write_id,
-                "stage": "anna_long_term_retrieval",
-                "rank": len(retrieved_items) + 1,
-                "score": None,
-                "timestamp": str(unit.timestamp),
-                "write_type": "anna_memory_unit",
-                "audit_eligible": True,
-            }
+        matched_long_term_ids.append(write_id)
+        if unit.session_id:
+            matched_long_term_sessions.append(unit.session_id)
+        if unit.timestamp is not None:
+            matched_long_term_timestamps.append(str(unit.timestamp))
+
+    if matched_long_term_ids:
+        item_record = build_item_record(
+            write_id=matched_long_term_ids[0] if len(matched_long_term_ids) == 1 else None,
+            source_write_ids=matched_long_term_ids,
+            source_session_ids=matched_long_term_sessions,
+            event_timestamps=matched_long_term_timestamps,
+            memory_timestamps=matched_long_term_timestamps,
+            stage="anna_long_term_retrieval",
+            rank=len(prompt_items) + 1,
+            score=None,
+            timestamp=matched_long_term_timestamps[0] if matched_long_term_timestamps else None,
+            write_type="anna_memory_unit",
+            source_form="anna_retrieved_text",
+            audit_eligible=True,
+            text=retrieval.retrieved_text,
+            source="anna_long_term_retrieval",
         )
-        prompt_items.append(
-            {
-                "write_id": write_id,
-                "stage": "anna_long_term_retrieval",
-                "rank": len(prompt_items) + 1,
-                "score": None,
-                "timestamp": str(unit.timestamp),
-                "write_type": "anna_memory_unit",
-                "audit_eligible": True,
-            }
-        )
+        retrieved_write_ids.extend(matched_long_term_ids)
+        prompt_write_ids.extend(matched_long_term_ids)
+        selected_write_ids.extend(matched_long_term_ids)
+        retrieved_items.append(dict(item_record))
+        prompt_items.append(dict(item_record))
 
     seen_prompt = set(seen_retrieved)
     for line in short_term:
@@ -895,15 +931,22 @@ def run_anna_replay(
             prompt_write_ids.append(write_id)
             selected_write_ids.append(write_id)
             prompt_items.append(
-                {
-                    "write_id": write_id,
-                    "stage": "short_term_prompt",
-                    "rank": len(prompt_items) + 1,
-                    "score": None,
-                    "timestamp": str(unit.timestamp),
-                    "write_type": write_type,
-                    "audit_eligible": True,
-                }
+                build_item_record(
+                    write_id=write_id,
+                    source_write_ids=[write_id],
+                    source_session_ids=[unit.session_id] if unit.session_id else [],
+                    event_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                    memory_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                    stage="short_term_prompt",
+                    rank=len(prompt_items) + 1,
+                    score=None,
+                    timestamp=unit.timestamp,
+                    write_type=write_type,
+                    source_form="anna_short_term",
+                    audit_eligible=True,
+                    text=line,
+                    source="anna_short_term",
+                )
             )
 
     for item in retrieval.fallback_memories:
@@ -925,22 +968,50 @@ def run_anna_replay(
                 prompt_write_ids.append(write_id)
                 selected_write_ids.append(write_id)
                 prompt_items.append(
-                    {
-                        "write_id": write_id,
-                        "stage": "fallback_prompt",
-                        "rank": len(prompt_items) + 1,
-                        "score": None,
-                        "timestamp": str(unit.timestamp),
-                        "write_type": write_type,
-                        "audit_eligible": True,
-                    }
+                    build_item_record(
+                        write_id=write_id,
+                        source_write_ids=[write_id],
+                        source_session_ids=[unit.session_id] if unit.session_id else [],
+                        event_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                        memory_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                        stage="fallback_prompt",
+                        rank=len(prompt_items) + 1,
+                        score=None,
+                        timestamp=unit.timestamp,
+                        write_type=write_type,
+                        source_form="anna_fallback",
+                        audit_eligible=True,
+                        text=item,
+                        source="anna_fallback",
+                    )
                 )
         else:
-            bridge_items.append({"text": item, "source": "anna_fallback", "audit_eligible": False})
-    if retrieval.retrieved_text:
-        bridge_items.append({"text": retrieval.retrieved_text, "source": "anna_native_retrieval_blob", "audit_eligible": False})
+            bridge_items.append(
+                {
+                    "text": item,
+                    "source": "anna_fallback",
+                    "source_form": "anna_fallback",
+                    "audit_eligible": False,
+                }
+            )
+    if retrieval.retrieved_text and not matched_long_term_ids:
+        bridge_items.append(
+            {
+                "text": retrieval.retrieved_text,
+                "source": "anna_native_retrieval_blob",
+                "source_form": "anna_retrieved_text",
+                "audit_eligible": False,
+            }
+        )
     if real_time_context:
-        bridge_items.append({"text": real_time_context, "source": "anna_real_time", "audit_eligible": False})
+        bridge_items.append(
+            {
+                "text": real_time_context,
+                "source": "anna_real_time",
+                "source_form": "anna_real_time",
+                "audit_eligible": False,
+            }
+        )
 
     query_record = build_query_record(
         agent="anna",
@@ -1300,6 +1371,51 @@ def main() -> None:
                             unit_index.setdefault(unit.text, []).append((unit, write_type))
 
                     seen_prompt = set()
+                    matched_long_term_ids: List[str] = []
+                    matched_long_term_sessions: List[str] = []
+                    matched_long_term_timestamps: List[str] = []
+                    for unit in map_anna_retrieved_units(retrieval.retrieved_text, memory_views.long_term_units):
+                        write_id = make_write_id(
+                            agent="anna",
+                            question_id=qid,
+                            write_type="anna_memory_unit",
+                            content=unit.text,
+                            session_id=unit.session_id,
+                            turn_span=unit.turn_span,
+                            timestamp=unit.timestamp,
+                        )
+                        if write_id in seen_prompt:
+                            continue
+                        seen_prompt.add(write_id)
+                        matched_long_term_ids.append(write_id)
+                        if unit.session_id:
+                            matched_long_term_sessions.append(unit.session_id)
+                        if unit.timestamp is not None:
+                            matched_long_term_timestamps.append(str(unit.timestamp))
+
+                    if matched_long_term_ids:
+                        item_record = build_item_record(
+                            write_id=matched_long_term_ids[0] if len(matched_long_term_ids) == 1 else None,
+                            source_write_ids=matched_long_term_ids,
+                            source_session_ids=matched_long_term_sessions,
+                            event_timestamps=matched_long_term_timestamps,
+                            memory_timestamps=matched_long_term_timestamps,
+                            stage="anna_long_term_retrieval",
+                            rank=len(prompt_items) + 1,
+                            score=None,
+                            timestamp=matched_long_term_timestamps[0] if matched_long_term_timestamps else None,
+                            write_type="anna_memory_unit",
+                            source_form="anna_retrieved_text",
+                            audit_eligible=True,
+                            text=retrieval.retrieved_text,
+                            source="anna_long_term_retrieval",
+                        )
+                        retrieved_write_ids.extend(matched_long_term_ids)
+                        prompt_write_ids.extend(matched_long_term_ids)
+                        selected_write_ids.extend(matched_long_term_ids)
+                        retrieved_items.append(dict(item_record))
+                        prompt_items.append(dict(item_record))
+
                     for line in short_term:
                         for unit, write_type in unit_index.get(line, []):
                             write_id = make_write_id(
@@ -1317,15 +1433,22 @@ def main() -> None:
                             prompt_write_ids.append(write_id)
                             selected_write_ids.append(write_id)
                             prompt_items.append(
-                                {
-                                    "write_id": write_id,
-                                    "stage": "short_term_prompt",
-                                    "rank": len(prompt_items) + 1,
-                                    "score": None,
-                                    "timestamp": str(unit.timestamp),
-                                    "write_type": write_type,
-                                    "audit_eligible": True,
-                                }
+                                build_item_record(
+                                    write_id=write_id,
+                                    source_write_ids=[write_id],
+                                    source_session_ids=[unit.session_id] if unit.session_id else [],
+                                    event_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                                    memory_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                                    stage="short_term_prompt",
+                                    rank=len(prompt_items) + 1,
+                                    score=None,
+                                    timestamp=unit.timestamp,
+                                    write_type=write_type,
+                                    source_form="anna_short_term",
+                                    audit_eligible=True,
+                                    text=line,
+                                    source="anna_short_term",
+                                )
                             )
 
                     for item in retrieval.fallback_memories:
@@ -1347,30 +1470,39 @@ def main() -> None:
                                 prompt_write_ids.append(write_id)
                                 selected_write_ids.append(write_id)
                                 prompt_items.append(
-                                    {
-                                        "write_id": write_id,
-                                        "stage": "fallback_prompt",
-                                        "rank": len(prompt_items) + 1,
-                                        "score": None,
-                                        "timestamp": str(unit.timestamp),
-                                        "write_type": write_type,
-                                        "audit_eligible": True,
-                                    }
+                                    build_item_record(
+                                        write_id=write_id,
+                                        source_write_ids=[write_id],
+                                        source_session_ids=[unit.session_id] if unit.session_id else [],
+                                        event_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                                        memory_timestamps=[unit.timestamp] if unit.timestamp is not None else [],
+                                        stage="fallback_prompt",
+                                        rank=len(prompt_items) + 1,
+                                        score=None,
+                                        timestamp=unit.timestamp,
+                                        write_type=write_type,
+                                        source_form="anna_fallback",
+                                        audit_eligible=True,
+                                        text=item,
+                                        source="anna_fallback",
+                                    )
                                 )
                         else:
                             bridge_items.append(
                                 {
                                     "text": item,
                                     "source": "anna_fallback",
+                                    "source_form": "anna_fallback",
                                     "audit_eligible": False,
                                 }
                             )
 
-                    if retrieval.retrieved_text:
+                    if retrieval.retrieved_text and not matched_long_term_ids:
                         bridge_items.append(
                             {
                                 "text": retrieval.retrieved_text,
                                 "source": "anna_native_retrieval_blob",
+                                "source_form": "anna_retrieved_text",
                                 "audit_eligible": False,
                             }
                         )
@@ -1379,6 +1511,7 @@ def main() -> None:
                             {
                                 "text": real_time_context,
                                 "source": "anna_real_time",
+                                "source_form": "anna_real_time",
                                 "audit_eligible": False,
                             }
                         )

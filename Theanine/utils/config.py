@@ -24,6 +24,14 @@ def get_config():
 
 
 def get_openai_key():
+    env_key = os.environ.get("OPENAI_API_KEY")
+    if env_key:
+        return env_key
     config = get_config()
-    openai_key = config['openai']['key']
+    openai_key = str(config['openai']['key'])
+    if openai_key.startswith("${") and openai_key.endswith("}"):
+        env_name = openai_key[2:-1].strip()
+        resolved = os.environ.get(env_name)
+        if resolved:
+            return resolved
     return openai_key

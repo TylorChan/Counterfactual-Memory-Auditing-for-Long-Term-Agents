@@ -17,7 +17,8 @@ LLM_MODEL="$8"
 OPENAI_BASE_URL="$9"
 START_DELAY_S="${10}"
 
-source "${HOME}/miniconda3/etc/profile.d/conda.sh"
+source "${WORKDIR}/scripts/conda_bootstrap.sh"
+source_conda_sh
 export ANONYMIZED_TELEMETRY=False
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -62,13 +63,12 @@ fi
 DATA_FILE="${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json"
 OUTPUT_SUFFIX="${RUN_TAG}_${PART_TAG}"
 
-LIMIT_ARGS=()
-OFFSET_ARGS=()
+COMMON_ARGS=()
 if [[ "${LIMIT}" != "0" ]]; then
-  LIMIT_ARGS=(--limit "${LIMIT}")
+  COMMON_ARGS+=(--limit "${LIMIT}")
 fi
 if [[ "${OFFSET}" != "0" ]]; then
-  OFFSET_ARGS=(--offset "${OFFSET}")
+  COMMON_ARGS+=(--offset "${OFFSET}")
 fi
 
 echo "============================================================"
@@ -84,61 +84,77 @@ echo "============================================================"
 case "${AGENT}" in
   anna)
     conda activate anna-lme
-    python "${WORKDIR}/anna_longmemeval_bridge/run_infer.py" \
-      --anna-agent-dir "${WORKDIR}/AnnaAgent" \
-      --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.trace.jsonl" \
-      --openai-base-url "${OPENAI_BASE_URL}" \
-      --llm-model "${LLM_MODEL}" \
-      --disable-full-tertiary-init \
-      --disable-need-check \
-      "${LIMIT_ARGS[@]}" \
-      "${OFFSET_ARGS[@]}"
+    cmd=(
+      python "${WORKDIR}/anna_longmemeval_bridge/run_infer.py"
+      --anna-agent-dir "${WORKDIR}/AnnaAgent"
+      --longmemeval-file "${DATA_FILE}"
+      --out-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.jsonl"
+      --trace-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.trace.jsonl"
+      --openai-base-url "${OPENAI_BASE_URL}"
+      --llm-model "${LLM_MODEL}"
+      --disable-full-tertiary-init
+      --disable-need-check
+    )
+    if (( ${#COMMON_ARGS[@]} > 0 )); then
+      cmd+=("${COMMON_ARGS[@]}")
+    fi
+    "${cmd[@]}"
     ;;
 
   share)
     conda activate share-lme
-    python "${WORKDIR}/share_longmemeval_bridge/run_infer.py" \
-      --share-dir "${WORKDIR}/SHARE" \
-      --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.trace.jsonl" \
-      --openai-base-url "${OPENAI_BASE_URL}" \
-      --llm-model "${LLM_MODEL}" \
-      --strict-selection-mode qa \
-      "${LIMIT_ARGS[@]}" \
-      "${OFFSET_ARGS[@]}"
+    cmd=(
+      python "${WORKDIR}/share_longmemeval_bridge/run_infer.py"
+      --share-dir "${WORKDIR}/SHARE"
+      --longmemeval-file "${DATA_FILE}"
+      --out-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.jsonl"
+      --trace-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.trace.jsonl"
+      --openai-base-url "${OPENAI_BASE_URL}"
+      --llm-model "${LLM_MODEL}"
+      --strict-selection-mode qa
+    )
+    if (( ${#COMMON_ARGS[@]} > 0 )); then
+      cmd+=("${COMMON_ARGS[@]}")
+    fi
+    "${cmd[@]}"
     ;;
 
   memoryos)
     conda activate memos-lme
-    python "${WORKDIR}/memos_longmemeval_bridge/run_infer.py" \
-      --memoryos-dir "${WORKDIR}/MemoryOS" \
-      --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.trace.jsonl" \
-      --openai-base-url "${OPENAI_BASE_URL}" \
-      --llm-model "${LLM_MODEL}" \
-      --reset-mode reinit \
-      "${LIMIT_ARGS[@]}" \
-      "${OFFSET_ARGS[@]}"
+    cmd=(
+      python "${WORKDIR}/memos_longmemeval_bridge/run_infer.py"
+      --memoryos-dir "${WORKDIR}/MemoryOS"
+      --longmemeval-file "${DATA_FILE}"
+      --out-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.jsonl"
+      --trace-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.trace.jsonl"
+      --openai-base-url "${OPENAI_BASE_URL}"
+      --llm-model "${LLM_MODEL}"
+      --reset-mode reinit
+    )
+    if (( ${#COMMON_ARGS[@]} > 0 )); then
+      cmd+=("${COMMON_ARGS[@]}")
+    fi
+    "${cmd[@]}"
     ;;
 
   ldagent)
     conda activate ld-lme
-    python "${WORKDIR}/ldagent_longmemeval_bridge/run_infer.py" \
-      --ld-agent-dir "${WORKDIR}/LD-Agent" \
-      --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.trace.jsonl" \
-      --openai-base-url "${OPENAI_BASE_URL}" \
-      --llm-model "${LLM_MODEL}" \
-      --session-gap-seconds 600 \
-      --dist-thres 0.5527 \
-      --no-force-flush-before-answer \
-      "${LIMIT_ARGS[@]}" \
-      "${OFFSET_ARGS[@]}"
+    cmd=(
+      python "${WORKDIR}/ldagent_longmemeval_bridge/run_infer.py"
+      --ld-agent-dir "${WORKDIR}/LD-Agent"
+      --longmemeval-file "${DATA_FILE}"
+      --out-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.jsonl"
+      --trace-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.trace.jsonl"
+      --openai-base-url "${OPENAI_BASE_URL}"
+      --llm-model "${LLM_MODEL}"
+      --session-gap-seconds 600
+      --dist-thres 0.5527
+      --no-force-flush-before-answer
+    )
+    if (( ${#COMMON_ARGS[@]} > 0 )); then
+      cmd+=("${COMMON_ARGS[@]}")
+    fi
+    "${cmd[@]}"
     ;;
 
   theanine)
@@ -147,14 +163,18 @@ case "${AGENT}" in
     if [[ ! -d "${THEANINE_REPO}" ]]; then
       THEANINE_REPO="${WORKDIR}/Theanine"
     fi
-    python "${WORKDIR}/theanine_longmemeval_bridge/run_infer.py" \
-      --theanine-dir "${THEANINE_REPO}" \
-      --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.trace.jsonl" \
-      --llm-model "${LLM_MODEL}" \
-      "${LIMIT_ARGS[@]}" \
-      "${OFFSET_ARGS[@]}"
+    cmd=(
+      python "${WORKDIR}/theanine_longmemeval_bridge/run_infer.py"
+      --theanine-dir "${THEANINE_REPO}"
+      --longmemeval-file "${DATA_FILE}"
+      --out-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.jsonl"
+      --trace-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.trace.jsonl"
+      --llm-model "${LLM_MODEL}"
+    )
+    if (( ${#COMMON_ARGS[@]} > 0 )); then
+      cmd+=("${COMMON_ARGS[@]}")
+    fi
+    "${cmd[@]}"
     ;;
 
   *)

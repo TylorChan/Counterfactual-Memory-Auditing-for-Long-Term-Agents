@@ -7,9 +7,9 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 4. Summarize only facts that are verifiable from repo files, logs, commands, or explicit user confirmation.
 5. Preserve discussion outcomes that materially affect experiment design, interpretation, fairness, runtime decisions, or evaluation protocol.
 6. Remove duplicate or stale points inside the same machine section while preserving the newest factual wording.
-7. Keep exactly one `(latest)` label in the whole file:
-   - Add `(latest)` to the section you updated.
-   - Remove `(latest)` from all other section titles.
+7. Keep exactly one latest-marker in the whole file:
+   - Add the latest-marker to the section you updated.
+   - Remove the latest-marker from all other section titles.
 8. Include one rough UTC timestamp for the updated section when helpful; exact minute precision is optional.
 9. If a value is uncertain, mark it as `TBD` instead of guessing.
 
@@ -34,20 +34,25 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary
+## My laptop progress summary (latest)
 
-- Update time (UTC): 2026-03-14 15:05:12
-- MacBook work shifted from ChatGPT-Web/THEANINE exploration to fairness control for the LongMemEval agent comparison.
-- Added a shared unified factual QA head in `longmemeval_unified_answer.py` and rewired all 5 bridges (`Anna`, `SHARE`, `LD-Agent`, `MemoryOS`, `THEANINE`) to use the same final answer prompt while leaving each agent’s native memory write/retrieve pipeline unchanged.
-- This design decision was explicit: normalize only the final answer head first, and do **not** repair temporal reasoning yet, so later counterfactual results reflect memory/retrieval behavior rather than dialogue-style prompt mismatch.
-- Local inspection of bridge code and existing trace files found baseline `retrieval-correct but influence-wrong` cases before any counterfactual intervention; two concrete examples discussed were `SHARE` question `c8c3f81d` (`Nike` evidence present but model abstains) and `MemoryOS` question `852ce960` (correct `$400,000` memory present but stale `$350,000` memory dominates).
-- The 5 modified bridges plus the shared prompt helper passed `py_compile`; dry-run smoke checks succeeded for the patched `MemoryOS` and `THEANINE` bridges.
-- For MSI execution, a new Slurm array script `run_agents_array_unifiedqa.slurm` was created and shell-validated. It now runs the unified-QA baselines as 9 tasks: `THEANINE`, `SHARE`, `MemoryOS`, and `LD-Agent` are split into two 25-question shards each, while `Anna` stays whole.
-- The Slurm array is configured as `0-8%6`, ordered longest-first to reduce makespan, and output filenames now carry a default `MM_DD` suffix plus shard tag (for example `..._03_14_p1.jsonl`) so new baseline files do not collide with older outputs.
-- The MSI launch plan now assumes six OpenAI keys/projects are available via `.env`: `OPENAI_API_KEY`, `OPENAI_API_KEY_1`, `...`, `OPENAI_API_KEY_5`, with the first 6 concurrent shards mapped one-to-one to distinct keys.
-- Next expected machine handoff: upload the updated code to MSI, run the new unified-QA baseline array there, then use those new baseline traces/results as the reference point before implementing the counterfactual replay wrapper.
+- Update time (UTC): 2026-04-09 (approx)
+- MacBook work moved from presentation-only interpretation back to pipeline hardening so the final reruns can support paper-level claims rather than small-sample slide results.
+- `currentplan.md` now fixes the final target as a 5-agent causal-memory analysis: all five agents should report baseline benchmark results, fragility metrics, Gini/influence concentration, a query-level retrieval–dominance 2×2, provenance coverage, ETDL/temporal dependency outputs, and case studies on an expanded sample larger than the current 50-question slice.
+- The final story is now explicit in the local plan: benchmark accuracy misses hidden causal structure; the real results should show write-level fragility, concentrated influence, retrieval–dominance mismatch, and temporal dependency beyond what standard LongMemEval accuracy reveals.
+- Shared audit/CF code was hardened on the laptop so that baseline traces and CF summaries use a common provenance-aware schema (`audit_v2` / `cf_audit_v2`) with item-level `source_write_ids`, query-relative dominance labels (`gold_dominant`, `non_gold_dominant`, `ambiguous`, `no_effect`), provenance coverage fields, and ETDL outputs.
+- The shared aggregation layer now has direct outputs for the professor-facing query-level 2×2 and for cross-agent metric summaries, including ETDL survival-curve points in `scripts/aggregate_cf_metrics.py`.
+- A MacBook smoke script `scripts/run_smoke_ltm.sh` plus conda bootstrap helpers were added so each agent can be baseline-tested, CF-tested, and matrix-tested locally before any MSI rerun.
+- Verified local smoke run completed end-to-end for all 5 agents with tag `smoke_0409_005451` / `cf_smoke_0409_005451`; each agent produced baseline audit output, CF run/query JSONL, and a query-matrix JSON under `LongMemEval/`.
+- Smoke-driven code fixes on the laptop hardened the runtime path for all five agents: Anna replay now uses the correct retriever path, SHARE lineage normalization no longer collides with its local helper, and shared scripts no longer depend on hard-coded local conda paths.
+- Verified from the smoke artifacts: `Anna`, `SHARE`, `MemoryOS`, and `LD-Agent` all produced baseline + CF + matrix files with the new schema; `MemoryOS`, `SHARE`, and `LD-Agent` showed full item coverage on the smoke example, while `Anna` still had `retrieved_item_coverage = 0.0` on that one example even though the end-to-end run succeeded.
+- `THEANINE` completed the full smoke run, but the first smoke artifacts exposed a provenance gap: the baseline audit for that example placed all answer-stage evidence in `bridge_items` with zero retrieved/prompt coverage even though CF still produced a dominant write and non-null ETDL.
+- After the smoke run, the laptop code patched `THEANINE` provenance again by mapping `before_refinement` text through bracketed summary segments instead of whole-string matching; offline reconstruction on the same smoke trace now recovers `retrieved_items = 6`, `prompt_items = 6`, `bridge_items = 0`, and a gold-support retrieval intersection on that example. This means future reruns should use the patched code, not the stale smoke artifact, for `THEANINE`.
+- The smoke artifacts also showed that Gini values are `0.0` under `cf_max_writes=1`; this is expected and only confirms the code path. Substantive Gini claims still require larger reruns with more rollback targets per query.
+- ETDL/temporal dependency is now structurally available in the code path, but the large rerun must be used to validate it across agents because many smoke summaries had null ETDL on the single tested example.
+- Practical next step from the laptop side: sync the patched code to MSI and rerun a larger slice (targeting roughly 100–150 questions, and higher if runtime permits) across all five agents with the hardened pipeline, then aggregate the final figures from fragility, Gini, 2×2, provenance coverage, and temporal dependency instead of relying on after-CF average accuracy.
 
-## MSI progress summary (latest)
+## MSI progress summary
 
 - Update time (UTC): 2026-03-19 (approx)
 - MSI is the main execution and consolidation machine for the unified-QA baseline and CF-only rollback analysis across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.
