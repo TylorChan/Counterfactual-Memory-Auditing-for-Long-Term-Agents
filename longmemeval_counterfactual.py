@@ -164,6 +164,33 @@ RULES_BY_QTYPE: Dict[str, Tuple[str, ...]] = {
 }
 
 
+# The professor-facing 2x2 should reflect what the agent explicitly fetched,
+# not every prompt-side memory item that happened to be exposed downstream.
+# These stage/source-form rules define the primary retrieval axis per agent.
+PRIMARY_RETRIEVAL_ITEM_RULES: Dict[str, Dict[str, Tuple[str, ...]]] = {
+    "memoryos": {
+        "stages": ("retrieved_page",),
+        "source_forms": ("memoryos_page",),
+    },
+    "theanine": {
+        "stages": ("before_refinement",),
+        "source_forms": ("theanine_before_refinement",),
+    },
+    "share": {
+        "stages": ("selected_memory",),
+        "source_forms": ("share_memory_summary",),
+    },
+    "ldagent": {
+        "stages": ("answer_context", "answer_related"),
+        "source_forms": ("context_memory", "related_memory", "ldagent_raw_dialog", "ldagent_summary"),
+    },
+    "anna": {
+        "stages": ("anna_long_term_retrieval",),
+        "source_forms": ("anna_retrieved_text",),
+    },
+}
+
+
 def _scope_ids(query_record: Dict, scope: str) -> List[str]:
     prompt_ids = normalize_list(query_record.get("prompt_write_ids"))
     retrieved_ids = normalize_list(query_record.get("retrieved_write_ids"))
@@ -173,6 +200,26 @@ def _scope_ids(query_record: Dict, scope: str) -> List[str]:
     if scope == "retrieved":
         return retrieved_ids or prompt_ids or candidate_ids
     return prompt_ids or retrieved_ids or candidate_ids
+
+
+def _is_primary_retrieval_item(agent: str, item: Dict) -> bool:
+    rules = PRIMARY_RETRIEVAL_ITEM_RULES.get(agent, {})
+    stages = set(rules.get("stages") or ())
+    source_forms = set(rules.get("source_forms") or ())
+    stage = str(item.get("stage") or "").strip()
+    source_form = str(item.get("source_form") or "").strip()
+    if stages or source_forms:
+        return (stage in stages) or (source_form in source_forms)
+    return bool(item.get("audit_eligible")) and bool(normalize_list(item.get("source_write_ids")))
+
+
+def _primary_retrieval_write_ids(agent: str, query_record: Dict) -> List[str]:
+    write_ids: List[str] = []
+    for item in (query_record.get("retrieved_items") or []):
+        if not _is_primary_retrieval_item(agent, item):
+            continue
+        write_ids.extend(normalize_list(item.get("source_write_ids")))
+    return normalize_list(write_ids)
 
 
 def _match_answer_sessions(write_record: Dict, answer_session_ids: Sequence[str]) -> bool:
@@ -372,6 +419,7 @@ def summarize_replay_cf(
     baseline_retrieved_ids = normalize_list(baseline_query_record.get("retrieved_write_ids"))
     baseline_prompt_ids = normalize_list(baseline_query_record.get("prompt_write_ids"))
     baseline_exposed_ids = normalize_list([*baseline_retrieved_ids, *baseline_prompt_ids])
+    baseline_primary_retrieved_ids = _primary_retrieval_write_ids(agent, baseline_query_record)
     question_type = str(baseline_query_record.get("question_type") or entry.get("question_type") or "unknown")
     query_time = (
         baseline_query_record.get("query_time")
@@ -455,6 +503,12 @@ def summarize_replay_cf(
     dominance = classify_query_dominance(rollback_run_records, dominance_threshold)
     dominant_write_id_set = set(dominance["dominant_write_ids"])
     dominant_ages_seconds: List[float] = []
+    gold_support_write_ids = [
+        record["write_id"]
+        for record in write_records
+        if _match_answer_sessions(record, answer_session_ids)
+    ]
+    gold_support_write_id_set = set(gold_support_write_ids)
     confusion = {
         "retrieved_correct_dominant": 0,
         "retrieved_correct_non_dominant": 0,
@@ -469,10 +523,8 @@ def summarize_replay_cf(
         if record["dominant"] and record.get("age_seconds") is not None:
             dominant_ages_seconds.append(float(record["age_seconds"]))
 
-    baseline_retrieval_correct = bool(
-        set(baseline_exposed_ids)
-        & {record["write_id"] for record in write_records if _match_answer_sessions(record, answer_session_ids)}
-    )
+    baseline_exposure_correct = bool(set(baseline_exposed_ids) & gold_support_write_id_set)
+    baseline_retrieval_correct = bool(set(baseline_primary_retrieved_ids) & gold_support_write_id_set)
     consistency_issues: List[str] = []
     if dominance["label"] == "gold_dominant" and not baseline_retrieval_correct:
         consistency_issues.append("gold_dominant_without_gold_retrieval")
@@ -496,11 +548,18 @@ def summarize_replay_cf(
         "baseline_query_timestamp": query_time,
         "baseline_answer": baseline_answer,
         "baseline_retrieval_correct": baseline_retrieval_correct,
-        "gold_support_write_ids": [
-            record["write_id"]
-            for record in write_records
-            if _match_answer_sessions(record, answer_session_ids)
-        ],
+        "baseline_exposure_correct": baseline_exposure_correct,
+        "baseline_primary_retrieval_write_ids": baseline_primary_retrieved_ids,
+        "baseline_primary_retrieval_item_count": sum(
+            1 for item in (baseline_query_record.get("retrieved_items") or []) if _is_primary_retrieval_item(agent, item)
+        ),
+        "baseline_retrieval_overlap_gold_write_ids": normalize_list(
+            set(baseline_primary_retrieved_ids) & gold_support_write_id_set
+        ),
+        "baseline_exposure_overlap_gold_write_ids": normalize_list(
+            set(baseline_exposed_ids) & gold_support_write_id_set
+        ),
+        "gold_support_write_ids": gold_support_write_ids,
         "rollback_gini": gini(rollback_scores),
         "rollback_influence_scores": rollback_scores,
         "rollback_mean_influence": (sum(rollback_scores) / len(rollback_scores)) if rollback_scores else 0.0,
@@ -564,7 +623,7 @@ def summarize_replay_cf(
         else "retrieved_correct_non_dominant"
         if summary["baseline_retrieval_correct"]
         else "retrieved_incorrect_dominant"
-        if summary["query_non_gold_dominant"]
+        if summary["query_gold_dominant"] or summary["query_non_gold_dominant"]
         else "retrieved_incorrect_non_dominant"
     )
     return run_records, summary

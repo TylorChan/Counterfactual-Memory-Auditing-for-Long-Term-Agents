@@ -36,8 +36,9 @@ load_env_file() {
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
     [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    line="${line#"${line%%[![:space:]]*}"}"
     line="${line#export }"
-    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
       local key="${BASH_REMATCH[1]}"
       local value="${BASH_REMATCH[2]}"
       if [[ "${value}" =~ ^\".*\"$ ]]; then
@@ -64,7 +65,9 @@ if [[ "${START_DELAY_S}" != "0" ]]; then
 fi
 
 DATA_FILE="${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${WORKDIR}/LongMemEval}"
 OUTPUT_SUFFIX="${RUN_TAG}_${PART_TAG}"
+mkdir -p "${OUTPUT_ROOT}"
 
 LIMIT_ARGS=()
 OFFSET_ARGS=()
@@ -94,18 +97,19 @@ echo "cf_target_scope=${CF_TARGET_SCOPE}"
 echo "cf_max_writes=${CF_MAX_WRITES}"
 echo "cf_dominance_threshold=${CF_DOMINANCE_THRESHOLD}"
 if [[ "${AGENT}" == "theanine" ]]; then
-  echo "theanine_repo_candidate=${WORKDIR}/Theanine_${PART_TAG}_repo"
+  THEANINE_ROOT="${THEANINE_REPO_ROOT:-${WORKDIR}}"
+  echo "theanine_repo_candidate=${THEANINE_ROOT}/Theanine_${PART_TAG}_repo"
 fi
 echo "============================================================"
 
 case "${AGENT}" in
   anna)
     conda activate anna-lme
-    python "${WORKDIR}/anna_longmemeval_bridge/run_infer.py" \
+      python "${WORKDIR}/anna_longmemeval_bridge/run_infer.py" \
       --anna-agent-dir "${WORKDIR}/AnnaAgent" \
       --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_anna_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_anna_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_anna_${OUTPUT_SUFFIX}.trace.jsonl" \
       --openai-base-url "${OPENAI_BASE_URL}" \
       --llm-model "${LLM_MODEL}" \
       --disable-full-tertiary-init \
@@ -117,11 +121,11 @@ case "${AGENT}" in
 
   share)
     conda activate share-lme
-    python "${WORKDIR}/share_longmemeval_bridge/run_infer.py" \
+      python "${WORKDIR}/share_longmemeval_bridge/run_infer.py" \
       --share-dir "${WORKDIR}/SHARE" \
       --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_share_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_share_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_share_${OUTPUT_SUFFIX}.trace.jsonl" \
       --openai-base-url "${OPENAI_BASE_URL}" \
       --llm-model "${LLM_MODEL}" \
       --strict-selection-mode qa \
@@ -132,11 +136,11 @@ case "${AGENT}" in
 
   memoryos)
     conda activate memos-lme
-    python "${WORKDIR}/memos_longmemeval_bridge/run_infer.py" \
+      python "${WORKDIR}/memos_longmemeval_bridge/run_infer.py" \
       --memoryos-dir "${WORKDIR}/MemoryOS" \
       --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_memoryos_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_memoryos_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_memoryos_${OUTPUT_SUFFIX}.trace.jsonl" \
       --openai-base-url "${OPENAI_BASE_URL}" \
       --llm-model "${LLM_MODEL}" \
       --reset-mode reinit \
@@ -147,11 +151,11 @@ case "${AGENT}" in
 
   ldagent)
     conda activate ld-lme
-    python "${WORKDIR}/ldagent_longmemeval_bridge/run_infer.py" \
+      python "${WORKDIR}/ldagent_longmemeval_bridge/run_infer.py" \
       --ld-agent-dir "${WORKDIR}/LD-Agent" \
       --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_ldagent_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_ldagent_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_ldagent_${OUTPUT_SUFFIX}.trace.jsonl" \
       --openai-base-url "${OPENAI_BASE_URL}" \
       --llm-model "${LLM_MODEL}" \
       --session-gap-seconds 600 \
@@ -164,15 +168,16 @@ case "${AGENT}" in
 
   theanine)
     conda activate theanine-lme
-    THEANINE_REPO="${WORKDIR}/Theanine_${PART_TAG}_repo"
+    THEANINE_ROOT="${THEANINE_REPO_ROOT:-${WORKDIR}}"
+    THEANINE_REPO="${THEANINE_ROOT}/Theanine_${PART_TAG}_repo"
     if [[ ! -d "${THEANINE_REPO}" ]]; then
       THEANINE_REPO="${WORKDIR}/Theanine"
     fi
-    python "${WORKDIR}/theanine_longmemeval_bridge/run_infer.py" \
+      python "${WORKDIR}/theanine_longmemeval_bridge/run_infer.py" \
       --theanine-dir "${THEANINE_REPO}" \
       --longmemeval-file "${DATA_FILE}" \
-      --out-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.jsonl" \
-      --trace-jsonl "${WORKDIR}/LongMemEval/preds_theanine_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_theanine_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_theanine_${OUTPUT_SUFFIX}.trace.jsonl" \
       --llm-model "${LLM_MODEL}" \
       "${LIMIT_ARGS[@]}" \
       "${OFFSET_ARGS[@]}" \

@@ -1,0 +1,6 @@
+campaign_dir=/users/9/chen7751/csci8980/LongMemEval/04_23_12_01
+log_dir=/users/9/chen7751/csci8980/LongMemEval/04_23_12_01/logs
+run_tag=s_50_unifiedqa_cf_04_23_12_01
+agent=anna
+submitted_at=2026-04-23 12:01:54 CDT
+run_anna_unifiedqa_cf_5x10.slurm: Submitted batch job 7240864

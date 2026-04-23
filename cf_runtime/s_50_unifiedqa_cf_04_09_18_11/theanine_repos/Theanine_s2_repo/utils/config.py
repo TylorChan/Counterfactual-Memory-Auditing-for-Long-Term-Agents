@@ -1,0 +1,37 @@
+import yaml
+import os
+from pathlib import Path
+
+
+def load_config(config_file):
+    with open(config_file, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
+
+
+def get_config_file_path():
+    env_path = os.environ.get("THEANINE_CONFIG_PATH")
+    if env_path:
+        return env_path
+    current_path = Path(__file__)
+    return str(current_path.resolve().parents[1] / 'conf.d' / 'config.yaml')
+
+
+def get_config():
+    config_path = get_config_file_path()
+    config = load_config(config_path)
+    return config
+
+
+def get_openai_key():
+    env_key = os.environ.get("OPENAI_API_KEY")
+    if env_key:
+        return env_key
+    config = get_config()
+    openai_key = str(config['openai']['key'])
+    if openai_key.startswith("${") and openai_key.endswith("}"):
+        env_name = openai_key[2:-1].strip()
+        resolved = os.environ.get(env_name)
+        if resolved:
+            return resolved
+    return openai_key

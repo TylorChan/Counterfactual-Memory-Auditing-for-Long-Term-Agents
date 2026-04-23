@@ -33,8 +33,9 @@ load_env_file() {
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
     [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    line="${line#"${line%%[![:space:]]*}"}"
     line="${line#export }"
-    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
       local key="${BASH_REMATCH[1]}"
       local value="${BASH_REMATCH[2]}"
       if [[ "${value}" =~ ^\".*\"$ ]]; then
@@ -77,7 +78,8 @@ echo "host=$(hostname)"
 echo "cwd=${WORKDIR}"
 echo "key_var=${KEY_VAR}"
 if [[ "${AGENT}" == "theanine" ]]; then
-  echo "theanine_repo_candidate=${WORKDIR}/Theanine_${PART_TAG}_repo"
+  THEANINE_ROOT="${THEANINE_REPO_ROOT:-${WORKDIR}}"
+  echo "theanine_repo_candidate=${THEANINE_ROOT}/Theanine_${PART_TAG}_repo"
 fi
 echo "============================================================"
 
@@ -159,7 +161,8 @@ case "${AGENT}" in
 
   theanine)
     conda activate theanine-lme
-    THEANINE_REPO="${WORKDIR}/Theanine_${PART_TAG}_repo"
+    THEANINE_ROOT="${THEANINE_REPO_ROOT:-${WORKDIR}}"
+    THEANINE_REPO="${THEANINE_ROOT}/Theanine_${PART_TAG}_repo"
     if [[ ! -d "${THEANINE_REPO}" ]]; then
       THEANINE_REPO="${WORKDIR}/Theanine"
     fi

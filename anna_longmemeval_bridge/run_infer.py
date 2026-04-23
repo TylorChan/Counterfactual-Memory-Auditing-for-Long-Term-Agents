@@ -1545,8 +1545,8 @@ def main() -> None:
                             entry=entry,
                             units=cf_units,
                             args=args,
-                            retriever=retriever,
-                            llm=client,
+                            retriever=anna_retriever,
+                            llm=llm,
                         )
                         cf_write_records = cf_baseline["write_records"]
                         cf_query_record = cf_baseline["query_record"]
@@ -1569,8 +1569,8 @@ def main() -> None:
                                 entry=entry,
                                 units=mutated_units,
                                 args=args,
-                                retriever=retriever,
-                                llm=client,
+                                retriever=anna_retriever,
+                                llm=llm,
                             )
                             cf_results.append(
                                 {

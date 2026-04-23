@@ -86,8 +86,9 @@ load_env_file() {
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
     [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    line="${line#"${line%%[![:space:]]*}"}"
     line="${line#export }"
-    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+    if [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
       local key="${BASH_REMATCH[1]}"
       local value="${BASH_REMATCH[2]}"
       if [[ "${value}" =~ ^\".*\"$ ]]; then

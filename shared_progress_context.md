@@ -34,7 +34,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary (latest)
+## My laptop progress summary
 
 - Update time (UTC): 2026-04-09 (approx)
 - MacBook work moved from presentation-only interpretation back to pipeline hardening so the final reruns can support paper-level claims rather than small-sample slide results.
@@ -52,7 +52,18 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 - ETDL/temporal dependency is now structurally available in the code path, but the large rerun must be used to validate it across agents because many smoke summaries had null ETDL on the single tested example.
 - Practical next step from the laptop side: sync the patched code to MSI and rerun a larger slice (targeting roughly 100–150 questions, and higher if runtime permits) across all five agents with the hardened pipeline, then aggregate the final figures from fragility, Gini, 2×2, provenance coverage, and temporal dependency instead of relying on after-CF average accuracy.
 
-## MSI progress summary
+## MSI progress summary (latest)
+
+- Update time (UTC): 2026-04-23 (approx)
+- Older MSI context from `2026-03-19` is preserved below unchanged; this new block records only the newer MSI-relevant conclusions discussed and verified after that summary.
+- `longmemeval_counterfactual.py` was corrected so the query-level 2x2 retrieval row no longer uses broad answer-stage exposure as `baseline_retrieval_correct`; the row now uses agent-specific primary retrieval items, while the old broad signal is retained separately as `baseline_exposure_correct`.
+- For `MemoryOS`, the primary retrieval row now means only `retrieved_page` / `memoryos_page`; `retrieved_user_knowledge` and `retrieved_assistant_knowledge` remain audited evidence but no longer count as “the right memory was fetched” for the professor-facing 2x2.
+- Offline recomputation on the existing `LongMemEval/04_09_18_11` `MemoryOS` artifacts changed the 2x2 from a collapsed top row to: `retrieved_correct_dominant = 15`, `retrieved_correct_non_dominant = 23`, `retrieved_incorrect_dominant = 1`, `retrieved_incorrect_non_dominant = 11`. The dominant/non-dominant column totals stayed `16/34`, so the change was only in the retrieval-row semantics.
+- Concrete `MemoryOS` example for the 2x2 fix: query `2698e78f` (“How often do I see my therapist, Dr. Smith?”) had a correct baseline answer, `old_exposure_correct = True`, and `new_primary_retrieval_correct = False`. The overlap with gold support writes came only from `retrieved_user_knowledge` / `retrieved_assistant_knowledge`; `retrieved_page` overlap was `0`. This is the clearest current example of why the previous retrieval-correctness definition was too broad.
+- Metric interpretation was clarified for the MSI-facing analysis plan: high baseline accuracy can coexist with high fragility. On `04_09_18_11`, `MemoryOS` remains the strongest currently discussed baseline system while also showing `query_fragility = 33/50`, which is being treated as evidence of stronger memory grounding rather than simple weakness.
+- Raw cross-agent influence comparisons are now treated as IDK-confounded unless accompanied by baseline abstention context. On `04_09_18_11`, baseline `I don't know` rates were: `MemoryOS 0.38`, `THEANINE 0.46`, `SHARE 0.86`, `LD-Agent 0.94`; this means low raw influence for `SHARE` or `LD-Agent` cannot be interpreted as robustness by itself.
+- `findings.md` now records two MSI-relevant interpretation conclusions: the current setup measures agent-specific memory pipelines under a shared LongMemEval QA readout rather than native end-to-end prompting, and `MemoryOS` currently exhibits the notable “high baseline accuracy + high counterfactual fragility” pattern.
+- `Anna` MSI rerun state: `LongMemEval/04_19_17_05` is not valid for CF analysis because the CF path produced empty `cf_queries` / `cf_runs` and polluted `preds` with `ERROR: name 'client' is not defined`. `anna_longmemeval_bridge/run_infer.py` has since been patched (`llm=llm`), so future MSI Anna-only reruns should use the patched code.
 
 - Update time (UTC): 2026-03-19 (approx)
 - MSI is the main execution and consolidation machine for the unified-QA baseline and CF-only rollback analysis across Anna, SHARE, MemoryOS, LD-Agent, and THEANINE.
