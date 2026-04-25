@@ -21,7 +21,8 @@ CF_MAX_WRITES="${12}"
 CF_DOMINANCE_THRESHOLD="${13}"
 ENABLE_CF_WRAPPER="${14}"
 
-source "${HOME}/miniconda3/etc/profile.d/conda.sh"
+source "${WORKDIR}/scripts/conda_bootstrap.sh"
+source_conda_sh
 export ANONYMIZED_TELEMETRY=False
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -59,12 +60,15 @@ if [[ -z "${KEY_VALUE}" ]]; then
   exit 1
 fi
 export OPENAI_API_KEY="${KEY_VALUE}"
+export LME_PROMPT_CACHE_ENABLED="${LME_PROMPT_CACHE_ENABLED:-1}"
+export LME_PROMPT_CACHE_KEY_PREFIX="${LME_PROMPT_CACHE_KEY_PREFIX:-lme-longmemeval}"
+export LME_PROMPT_CACHE_LOG="${LME_PROMPT_CACHE_LOG:-1}"
 
 if [[ "${START_DELAY_S}" != "0" ]]; then
   sleep "${START_DELAY_S}"
 fi
 
-DATA_FILE="${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json"
+DATA_FILE="${DATA_FILE:-${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${WORKDIR}/LongMemEval}"
 OUTPUT_SUFFIX="${RUN_TAG}_${PART_TAG}"
 mkdir -p "${OUTPUT_ROOT}"
@@ -92,6 +96,11 @@ echo "[$(date)] agent=${AGENT} part=${PART_TAG} offset=${OFFSET} limit=${LIMIT}"
 echo "host=$(hostname)"
 echo "cwd=${WORKDIR}"
 echo "key_var=${KEY_VAR}"
+echo "data_file=${DATA_FILE}"
+echo "prompt_cache_enabled=${LME_PROMPT_CACHE_ENABLED}"
+echo "prompt_cache_key_prefix=${LME_PROMPT_CACHE_KEY_PREFIX}"
+echo "prompt_cache_log=${LME_PROMPT_CACHE_LOG}"
+echo "prompt_cache_retention=${LME_PROMPT_CACHE_RETENTION:-}"
 echo "enable_cf_wrapper=${ENABLE_CF_WRAPPER}"
 echo "cf_target_scope=${CF_TARGET_SCOPE}"
 echo "cf_max_writes=${CF_MAX_WRITES}"

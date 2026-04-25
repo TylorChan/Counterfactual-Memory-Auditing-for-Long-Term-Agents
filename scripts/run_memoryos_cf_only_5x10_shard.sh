@@ -60,12 +60,15 @@ if [[ -z "${KEY_VALUE}" ]]; then
   exit 1
 fi
 export OPENAI_API_KEY="${KEY_VALUE}"
+export LME_PROMPT_CACHE_ENABLED="${LME_PROMPT_CACHE_ENABLED:-1}"
+export LME_PROMPT_CACHE_KEY_PREFIX="${LME_PROMPT_CACHE_KEY_PREFIX:-lme-longmemeval}"
+export LME_PROMPT_CACHE_LOG="${LME_PROMPT_CACHE_LOG:-1}"
 
 if [[ "${START_DELAY_S}" != "0" ]]; then
   sleep "${START_DELAY_S}"
 fi
 
-DATA_FILE="${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json"
+DATA_FILE="${DATA_FILE:-${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json}"
 SRC_Q1="${WORKDIR}/LongMemEval/preds_memoryos_s_50_unifiedqa_${BASELINE_TAG}_p1.trace.audit_queries.jsonl"
 SRC_W1="${WORKDIR}/LongMemEval/preds_memoryos_s_50_unifiedqa_${BASELINE_TAG}_p1.trace.audit_writes.jsonl"
 SRC_Q2="${WORKDIR}/LongMemEval/preds_memoryos_s_50_unifiedqa_${BASELINE_TAG}_p2.trace.audit_queries.jsonl"
@@ -145,6 +148,11 @@ echo "cwd=${WORKDIR}"
 echo "baseline_tag=${BASELINE_TAG}"
 echo "cf_tag=${CF_TAG}"
 echo "key_var=${KEY_VAR}"
+echo "data_file=${DATA_FILE}"
+echo "prompt_cache_enabled=${LME_PROMPT_CACHE_ENABLED}"
+echo "prompt_cache_key_prefix=${LME_PROMPT_CACHE_KEY_PREFIX}"
+echo "prompt_cache_log=${LME_PROMPT_CACHE_LOG}"
+echo "prompt_cache_retention=${LME_PROMPT_CACHE_RETENTION:-}"
 echo "cf_target_scope=${CF_TARGET_SCOPE}"
 echo "cf_max_writes=${CF_MAX_WRITES}"
 echo "cf_dominance_threshold=${CF_DOMINANCE_THRESHOLD}"

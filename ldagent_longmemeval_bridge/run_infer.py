@@ -19,6 +19,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from openai_prompt_cache import install_openai_prompt_cache
+
+install_openai_prompt_cache("ldagent")
+
 from longmemeval_audit import (
     append_jsonl as append_audit_jsonl,
     build_item_record,

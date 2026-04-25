@@ -34,7 +34,21 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary
+## My laptop progress summary (latest)
+
+- Update time (UTC): 2026-04-25 (approx)
+- This block is intentionally appended above the older MacBook notes without reconciling them; it records the latest MacBook-side decisions and checks before the MSI 100-question run.
+- Balanced 100-question LongMemEval slice is ready at `LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json`; verified locally as `100` unique questions, preserving the original 50 and adding 50 balanced extra questions with distribution: `multi-session=18`, `temporal-reasoning=18`, and `16` each for `single-session-user`, `single-session-preference`, `knowledge-update`, and `single-session-assistant`.
+- The five main unified-QA+CF Slurm launchers now default to `TOTAL_QUESTIONS=100`, `SHARDS=15`, and the balanced 100-question data file. Shard splitting is dynamic, so 100 questions over 15 shards maps to ten 7-question shards plus five 6-question shards.
+- `KEY_SLOTS` was added to the Slurm/submitter path so parallel shards can cycle through available OpenAI keys. If only 10 keys are available, `KEY_SLOTS=10` is acceptable; adding five more keys mainly reduces rate-limit risk and is not expected to change results.
+- OpenAI prompt-cache hinting is wired through `openai_prompt_cache.py` and installed in all five bridges (`anna`, `share`, `memoryos`, `ldagent`, `theanine`). Submitter/shard scripts export `LME_PROMPT_CACHE_*`, the wrapper adds `prompt_cache_key`, logs `cached_tokens`, and falls back through `extra_body` or no-cache retry if an SDK/API rejects cache parameters.
+- Local base Python was updated with `openai==2.32.0`; inspection confirmed `chat.completions.create` supports `prompt_cache_key`, `prompt_cache_retention`, and `extra_body`, and local unit checks passed for both the direct cache-key path and the fallback `extra_body` path. No real API call was made during this check.
+- Prompt-cache interpretation is settled for the main run: `gpt-4o-mini` supports prompt caching and cached input pricing, but cache hits require exact prefix reuse on prompts of roughly `1024+` tokens. `gpt-4o-mini` should use default in-memory caching; do not set default `24h` retention because extended retention is not supported for this model in the current docs.
+- The main baseline+CF experiments for all five agents default to `LLM_MODEL=gpt-4o-mini`. The submitter manifest and each main Slurm log now print `llm_model=...` so future result folders can prove which generation model was used. The LongMemEval judge/evaluator is separate and can still use `gpt-4o` or `gpt-4o-mini` depending on the evaluation command.
+- Current code can compute the intended 10 core outputs: baseline/category accuracy via `LongMemEval/src/evaluation/evaluate_qa.py`, and answer flip rate, query fragility, abstention flip rate, mean answer distance, rollback Gini, query-level 2x2, dominance labels, provenance coverage, ETDL, and ETDL survival curve via the CF query summaries plus `scripts/aggregate_cf_metrics.py` / `scripts/aggregate_cf_query_matrix.py`.
+- `scripts/aggregate_cf_metrics.py` was corrected so the aggregated 2x2 is recomputed from retrieval correctness and query dominance labels instead of blindly trusting any stale per-summary `confusion_matrix`. Synthetic checks confirmed the primary-retrieval and 2x2 behavior.
+- The current cost optimization is only OpenAI prefix/prompt-cache hinting, not a local exact-response cache. A local exact-response cache remains a possible later optimization for deterministic repeated calls, but it is not currently implemented and should not be assumed in MSI cost estimates.
+- Recommended MSI submission posture from the MacBook side: run the 100-question code with `KEY_SLOTS=10` if only 10 keys are available, avoid submitting all five heavy agents at the exact same moment if rate limits are a concern, and inspect early logs for `[prompt-cache] key=... cached_tokens=...` plus `llm_model=gpt-4o-mini`.
 
 - Update time (UTC): 2026-04-09 (approx)
 - MacBook work moved from presentation-only interpretation back to pipeline hardening so the final reruns can support paper-level claims rather than small-sample slide results.
@@ -52,7 +66,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 - ETDL/temporal dependency is now structurally available in the code path, but the large rerun must be used to validate it across agents because many smoke summaries had null ETDL on the single tested example.
 - Practical next step from the laptop side: sync the patched code to MSI and rerun a larger slice (targeting roughly 100–150 questions, and higher if runtime permits) across all five agents with the hardened pipeline, then aggregate the final figures from fragility, Gini, 2×2, provenance coverage, and temporal dependency instead of relying on after-CF average accuracy.
 
-## MSI progress summary (latest)
+## MSI progress summary
 
 - Update time (UTC): 2026-04-23 (approx)
 - Older MSI context from `2026-03-19` is preserved below unchanged; this new block records only the newer MSI-relevant conclusions discussed and verified after that summary.

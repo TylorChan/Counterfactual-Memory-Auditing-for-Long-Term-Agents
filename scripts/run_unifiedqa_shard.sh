@@ -56,12 +56,15 @@ if [[ -z "${KEY_VALUE}" ]]; then
   exit 1
 fi
 export OPENAI_API_KEY="${KEY_VALUE}"
+export LME_PROMPT_CACHE_ENABLED="${LME_PROMPT_CACHE_ENABLED:-1}"
+export LME_PROMPT_CACHE_KEY_PREFIX="${LME_PROMPT_CACHE_KEY_PREFIX:-lme-longmemeval}"
+export LME_PROMPT_CACHE_LOG="${LME_PROMPT_CACHE_LOG:-1}"
 
 if [[ "${START_DELAY_S}" != "0" ]]; then
   sleep "${START_DELAY_S}"
 fi
 
-DATA_FILE="${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json"
+DATA_FILE="${DATA_FILE:-${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_50.json}"
 OUTPUT_SUFFIX="${RUN_TAG}_${PART_TAG}"
 
 COMMON_ARGS=()
@@ -77,6 +80,11 @@ echo "[$(date)] agent=${AGENT} part=${PART_TAG} offset=${OFFSET} limit=${LIMIT}"
 echo "host=$(hostname)"
 echo "cwd=${WORKDIR}"
 echo "key_var=${KEY_VAR}"
+echo "data_file=${DATA_FILE}"
+echo "prompt_cache_enabled=${LME_PROMPT_CACHE_ENABLED}"
+echo "prompt_cache_key_prefix=${LME_PROMPT_CACHE_KEY_PREFIX}"
+echo "prompt_cache_log=${LME_PROMPT_CACHE_LOG}"
+echo "prompt_cache_retention=${LME_PROMPT_CACHE_RETENTION:-}"
 if [[ "${AGENT}" == "theanine" ]]; then
   THEANINE_ROOT="${THEANINE_REPO_ROOT:-${WORKDIR}}"
   echo "theanine_repo_candidate=${THEANINE_ROOT}/Theanine_${PART_TAG}_repo"

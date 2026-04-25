@@ -26,6 +26,44 @@ def survival_points(values: List[float]) -> List[Dict]:
     ]
 
 
+def first_present(row: Dict, *keys: str):
+    for key in keys:
+        if key in row:
+            return row.get(key)
+    return None
+
+
+def normalize_bool(value) -> bool:
+    return bool(value)
+
+
+def dominance_label(row: Dict) -> str:
+    label = first_present(row, "query_dominance_label_repaired", "query_dominance_label")
+    if label is not None:
+        return str(label)
+    if normalize_bool(first_present(row, "query_gold_dominant_repaired", "query_gold_dominant")):
+        return "gold_dominant"
+    if normalize_bool(first_present(row, "query_non_gold_dominant_repaired", "query_non_gold_dominant")):
+        return "non_gold_dominant"
+    if normalize_bool(first_present(row, "query_ambiguous_dominance_repaired", "query_ambiguous_dominance")):
+        return "ambiguous"
+    return "no_effect"
+
+
+def query_confusion_cell(row: Dict) -> str:
+    retrieval_correct = normalize_bool(
+        first_present(row, "baseline_retrieval_correct_repaired", "baseline_retrieval_correct")
+    )
+    label = dominance_label(row)
+    if retrieval_correct and label == "gold_dominant":
+        return "retrieved_correct_dominant"
+    if retrieval_correct:
+        return "retrieved_correct_non_dominant"
+    if label in {"gold_dominant", "non_gold_dominant"}:
+        return "retrieved_incorrect_dominant"
+    return "retrieved_incorrect_non_dominant"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("cf_query_jsonl", nargs="+")
@@ -64,12 +102,13 @@ def main() -> None:
         }
         consistency_issue_counts: Dict[str, int] = {}
         for row in agent_rows:
-            for key, value in (row.get("confusion_matrix") or {}).items():
-                confusion[key] = confusion.get(key, 0) + int(value)
-            label = str(row.get("query_dominance_label") or "")
+            cell = query_confusion_cell(row)
+            confusion[cell] = confusion.get(cell, 0) + 1
+            label = dominance_label(row)
             if label in dominance_label_counts:
                 dominance_label_counts[label] += 1
-            for issue in (row.get("consistency_issues") or []):
+            issues = first_present(row, "consistency_issues_repaired", "consistency_issues") or []
+            for issue in issues:
                 issue_name = str(issue)
                 consistency_issue_counts[issue_name] = consistency_issue_counts.get(issue_name, 0) + 1
         out[agent] = {
