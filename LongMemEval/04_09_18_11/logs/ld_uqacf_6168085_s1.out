@@ -1,0 +1,15 @@
+============================================================
+[Fri Apr 10 09:21:14 CDT 2026] agent=ldagent part=s1 offset=0 limit=5
+host=cn1123
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_1
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 5 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json
+Done. success=5 failed=0 total=5 time=82594.8s out=/users/9/chen7751/csci8980/LongMemEval/04_09_18_11/preds_ldagent_s_50_unifiedqa_cf_04_09_18_11_s1.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_09_18_11/preds_ldagent_s_50_unifiedqa_cf_04_09_18_11_s1.trace.jsonl
+[Sat Apr 11 08:18:07 CDT 2026] Completed agent=ldagent part=s1

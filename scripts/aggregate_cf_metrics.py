@@ -34,7 +34,17 @@ def first_present(row: Dict, *keys: str):
 
 
 def normalize_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
     return bool(value)
+
+
+def has_primary_retrieval_schema(row: Dict) -> bool:
+    return (
+        "baseline_primary_retrieval_write_ids" in row
+        or "baseline_retrieval_overlap_gold_write_ids" in row
+        or "baseline_exposure_correct" in row
+    )
 
 
 def dominance_label(row: Dict) -> str:
@@ -81,6 +91,7 @@ def main() -> None:
     out: Dict[str, Dict] = {}
     for agent, agent_rows in by_agent.items():
         ginis = [float(row.get("rollback_gini") or 0.0) for row in agent_rows]
+        influence_means = [float(row.get("rollback_mean_influence") or 0.0) for row in agent_rows]
         answer_flip_rates = [float(row.get("rollback_answer_flip_rate") or 0.0) for row in agent_rows]
         abstention_flip_rates = [float(row.get("rollback_abstention_flip_rate") or 0.0) for row in agent_rows]
         answer_distances = [float(row.get("rollback_mean_answer_distance") or 0.0) for row in agent_rows]
@@ -88,6 +99,24 @@ def main() -> None:
         retrieved_coverages = [float(row.get("retrieved_item_coverage") or 0.0) for row in agent_rows]
         prompt_coverages = [float(row.get("prompt_item_coverage") or 0.0) for row in agent_rows]
         etdls = [float(row["etdl_seconds"]) for row in agent_rows if row.get("etdl_seconds") is not None]
+        primary_schema_count = sum(1 for row in agent_rows if has_primary_retrieval_schema(row))
+        retrieval_correct_flags = [
+            1.0
+            if normalize_bool(first_present(row, "baseline_retrieval_correct_repaired", "baseline_retrieval_correct"))
+            else 0.0
+            for row in agent_rows
+        ]
+        exposure_rows = [
+            row
+            for row in agent_rows
+            if first_present(row, "baseline_exposure_correct_repaired", "baseline_exposure_correct") is not None
+        ]
+        exposure_correct_flags = [
+            1.0
+            if normalize_bool(first_present(row, "baseline_exposure_correct_repaired", "baseline_exposure_correct"))
+            else 0.0
+            for row in exposure_rows
+        ]
         confusion = {
             "retrieved_correct_dominant": 0,
             "retrieved_correct_non_dominant": 0,
@@ -117,10 +146,16 @@ def main() -> None:
             "query_fragility_rate": mean(fragility_flags) if fragility_flags else 0.0,
             "abstention_flip_rate_mean": mean(abstention_flip_rates) if abstention_flip_rates else 0.0,
             "mean_answer_distance": mean(answer_distances) if answer_distances else 0.0,
+            "mean_influence_per_query": mean(influence_means) if influence_means else 0.0,
+            "mean_influence_per_query_median": median(influence_means) if influence_means else 0.0,
             "rollback_gini_mean": mean(ginis) if ginis else 0.0,
             "rollback_gini_median": median(ginis) if ginis else 0.0,
+            "baseline_retrieval_correct_rate": mean(retrieval_correct_flags) if retrieval_correct_flags else 0.0,
+            "baseline_exposure_correct_rate": mean(exposure_correct_flags) if exposure_correct_flags else None,
             "retrieved_item_coverage_mean": mean(retrieved_coverages) if retrieved_coverages else 0.0,
             "prompt_item_coverage_mean": mean(prompt_coverages) if prompt_coverages else 0.0,
+            "primary_retrieval_schema_rows": primary_schema_count,
+            "legacy_retrieval_schema_rows": len(agent_rows) - primary_schema_count,
             "etdl_count": len(etdls),
             "etdl_mean_seconds": mean(etdls) if etdls else None,
             "etdl_median_seconds": median(etdls) if etdls else None,

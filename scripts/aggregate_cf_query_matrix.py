@@ -19,7 +19,17 @@ def load_jsonl(path: Path) -> List[Dict]:
 
 
 def normalize_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
     return bool(value)
+
+
+def has_primary_retrieval_schema(row: Dict) -> bool:
+    return (
+        "baseline_primary_retrieval_write_ids" in row
+        or "baseline_retrieval_overlap_gold_write_ids" in row
+        or "baseline_exposure_correct" in row
+    )
 
 
 def first_present(obj: Dict, *keys: str):
@@ -54,11 +64,25 @@ def aggregate_query_matrix(
     }
     consistency_issue_counts: Dict[str, int] = {}
     query_rows: List[Dict] = []
+    primary_schema_count = 0
+    exposure_correct_count = 0
+    exposure_known_count = 0
 
     for summary in summaries:
         qid = str(summary.get("question_id") or "").strip()
         if not qid:
             continue
+        if has_primary_retrieval_schema(summary):
+            primary_schema_count += 1
+        exposure_correct_value = first_present(
+            summary,
+            "baseline_exposure_correct_repaired",
+            "baseline_exposure_correct",
+        )
+        if exposure_correct_value is not None:
+            exposure_known_count += 1
+            if normalize_bool(exposure_correct_value):
+                exposure_correct_count += 1
         retrieval_correct = normalize_bool(
             first_present(
                 summary,
@@ -131,6 +155,9 @@ def aggregate_query_matrix(
             {
                 "question_id": qid,
                 "baseline_retrieval_correct": retrieval_correct,
+                "baseline_exposure_correct": (
+                    normalize_bool(exposure_correct_value) if exposure_correct_value is not None else None
+                ),
                 "query_gold_dominant": dominance_label == "gold_dominant",
                 "query_non_gold_dominant": dominance_label == "non_gold_dominant",
                 "query_dominance_label": dominance_label,
@@ -175,6 +202,10 @@ def aggregate_query_matrix(
         "counts": counts,
         "dominance_label_counts": dominance_label_counts,
         "consistency_issue_counts": consistency_issue_counts,
+        "primary_retrieval_schema_rows": primary_schema_count,
+        "legacy_retrieval_schema_rows": total - primary_schema_count,
+        "baseline_exposure_correct_count": exposure_correct_count,
+        "baseline_exposure_known_count": exposure_known_count,
         "row_totals": row_totals,
         "row_percentages": row_percentages,
         "queries": query_rows,

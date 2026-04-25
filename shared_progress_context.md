@@ -34,7 +34,7 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
   - Run unified evaluation and produce a single high-level comparison table (accuracy + per-task + runtime).
   - Keep this file updated at each machine handoff with only high-level, decision-relevant deltas.
 
-## My laptop progress summary (latest)
+## My laptop progress summary
 
 - Update time (UTC): 2026-04-25 (approx)
 - This block is intentionally appended above the older MacBook notes without reconciling them; it records the latest MacBook-side decisions and checks before the MSI 100-question run.
@@ -66,7 +66,20 @@ This file is the cross-machine progress context for this repo. Use it so Codex o
 - ETDL/temporal dependency is now structurally available in the code path, but the large rerun must be used to validate it across agents because many smoke summaries had null ETDL on the single tested example.
 - Practical next step from the laptop side: sync the patched code to MSI and rerun a larger slice (targeting roughly 100–150 questions, and higher if runtime permits) across all five agents with the hardened pipeline, then aggregate the final figures from fragility, Gini, 2×2, provenance coverage, and temporal dependency instead of relying on after-CF average accuracy.
 
-## MSI progress summary
+## MSI progress summary (latest)
+
+- Update time (UTC): 2026-04-25 (approx)
+- This block is appended above the older MSI notes without reconciling them; it records the current MSI run posture and metric-aggregation checks after the 100-question rerun setup.
+- Current 100-question submission command is `bash scripts/submit_unifiedqa_cf_campaign.sh` from repo root. The submitter defaults to `LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json`, `TOTAL_QUESTIONS=100`, `SHARDS=15`, `KEY_SLOTS=10`, prompt-cache logging enabled, and `LLM_MODEL=gpt-4o-mini` unless overridden.
+- The five active root Slurm files are now the only root-level `.slurm` launchers: `run_anna_unifiedqa_cf_5x10.slurm`, `run_memoryos_unifiedqa_cf_5x10.slurm`, `run_ldagent_unifiedqa_cf_5x10.slurm`, `run_share_unifiedqa_cf_5x10.slurm`, and `run_theanine_unifiedqa_cf_5x10.slurm`; older root Slurms were moved to `old_slurms/`.
+- Current active Slurm resources: Anna/MemoryOS/LD-Agent/SHARE request `15` tasks, `90g` memory, `18g` tmp, and `72h`; THEANINE requests `15` tasks, `120g` memory, `30g` tmp, and `84h`.
+- Existing `04_09_18_11/logs/*.parallel.log` were used to estimate 100-question walltime under 15 shards. Worst observed per-question scaling predicts approximately: SHARE `27.4h`, LD-Agent `36.3h`, MemoryOS `44.5h`, and THEANINE `52.6h` for the slowest 7-question shard. This supports `72h` for most agents and the more conservative `84h` for THEANINE.
+- Pending jobs submitted before Slurm file edits do not inherit new resource settings. If old jobs `7459571-7459575` are still pending, cancel them with `scancel 7459571 7459572 7459573 7459574 7459575` before resubmitting the updated campaign.
+- `scripts/aggregate_cf_metrics.py` was checked and patched to include `mean_influence_per_query` and `mean_influence_per_query_median`, so the aggregate output now directly covers the influence metric discussed in the report plan.
+- `scripts/aggregate_cf_metrics.py` and `scripts/aggregate_cf_query_matrix.py` now emit retrieval-schema diagnostics: `primary_retrieval_schema_rows` and `legacy_retrieval_schema_rows`. Old `04_09_18_11` CF summaries show `legacy_retrieval_schema_rows=50` for MemoryOS, so they should not be used to report the repaired primary-retrieval 2x2.
+- The aggregation scripts were also hardened so string booleans such as `"false"` are parsed as false, preventing repaired JSON fields from being accidentally treated as true.
+- Verification performed on MSI: `python -m py_compile scripts/aggregate_cf_metrics.py scripts/aggregate_cf_query_matrix.py` passed; synthetic CF-query checks confirmed all four 2x2 cells aggregate correctly and that `baseline_retrieval_correct: "false"` is handled correctly.
+- Prompt caching should be treated as a cost/latency bonus, not as a walltime guarantee. The conservative walltime plan is based on observed logs, while prompt-cache hits can be checked later via `[prompt-cache] ... cached_tokens=...` lines in new logs.
 
 - Update time (UTC): 2026-04-23 (approx)
 - Older MSI context from `2026-03-19` is preserved below unchanged; this new block records only the newer MSI-relevant conclusions discussed and verified after that summary.

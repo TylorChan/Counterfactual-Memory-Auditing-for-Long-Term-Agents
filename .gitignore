@@ -34,8 +34,8 @@ chatgpt_web_eval/chrome_cdp_profile/
 tmp_share/
 *.log
 # Slurm stdout / stderr
-*.out
-*.err
+# *.out
+# *.err
 
 # THEANINE generated bridge episodes
 Theanine/resources/data/bridge_*.json
@@ -48,7 +48,7 @@ Theanine_p1_repo/
 Theanine_p2_repo/
 memos_longmemeval_bridge/runtime_storage/
 LongMemEval/merged/
-logs/
+# logs/
 
 # Local planning / generated analysis artifacts
 LongMemEval/*.query_matrix.json

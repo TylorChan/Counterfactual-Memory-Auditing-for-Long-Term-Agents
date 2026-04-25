@@ -1,0 +1,20 @@
+============================================================
+[Fri Apr 10 09:04:45 CDT 2026] agent=anna part=s10 offset=45 limit=5
+host=cn1123
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_10
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 5 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_50.json
+FAIL qid=e831120c: name 'retriever' is not defined
+FAIL qid=7e00a6cb: name 'retriever' is not defined
+FAIL qid=1da05512: name 'retriever' is not defined
+FAIL qid=gpt4_a2d1d1f6: name 'retriever' is not defined
+FAIL qid=07b6f563: name 'retriever' is not defined
+Done. success=0 failed=5 total=5 time=45.6s out=/users/9/chen7751/csci8980/LongMemEval/04_09_18_11/preds_anna_s_50_unifiedqa_cf_04_09_18_11_s10.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_09_18_11/preds_anna_s_50_unifiedqa_cf_04_09_18_11_s10.trace.jsonl
+[Fri Apr 10 09:05:33 CDT 2026] Completed agent=anna part=s10

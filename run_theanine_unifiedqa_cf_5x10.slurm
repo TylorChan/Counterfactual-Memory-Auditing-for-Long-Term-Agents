@@ -3,7 +3,7 @@
 
 #SBATCH --job-name=the_uqacf
 #SBATCH --partition=msismall
-#SBATCH --time=72:00:00
+#SBATCH --time=84:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=15
 #SBATCH --cpus-per-task=1
@@ -28,7 +28,7 @@ RUN_TAG="${RUN_TAG:-s_100_unifiedqa_cf_theanine_${DATE_SUFFIX}}"
 DATA_FILE="${DATA_FILE:-${WORKDIR}/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json}"
 TOTAL_QUESTIONS="${TOTAL_QUESTIONS:-100}"
 SHARDS="${SHARDS:-15}"
-KEY_SLOTS="${KEY_SLOTS:-${SHARDS}}"
+KEY_SLOTS="${KEY_SLOTS:-10}"
 LLM_MODEL="${LLM_MODEL:-gpt-4o-mini}"
 OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 STAGGER_SECONDS="${STAGGER_SECONDS:-30}"

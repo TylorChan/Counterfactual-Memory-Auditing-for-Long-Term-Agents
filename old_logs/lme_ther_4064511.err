@@ -1,0 +1,21 @@
+THEANINE->LongMemEval:   0%|          | 0/3 [00:00<?, ?q/s]/users/9/chen7751/csci8980/Theanine/src/memory_constructor.py:9: LangChainDeprecationWarning: Importing get_openai_callback from /users/9/chen7751/miniconda3/envs/theanine-lme/lib/python3.10/site-packages/langchain/callbacks/__init__.py is deprecated. Please replace deprecated imports:
+
+>> from /users/9/chen7751/miniconda3/envs/theanine-lme/lib/python3.10/site-packages/langchain/callbacks/__init__.py import get_openai_callback
+
+with new imports of:
+
+>> from langchain_community.callbacks.manager import get_openai_callback
+You can use the langchain cli to **automatically** upgrade many imports. Please see documentation here <https://python.langchain.com/v0.2/docs/versions/v0_2/>
+  from langchain.callbacks import get_openai_callback
+/users/9/chen7751/csci8980/Theanine/src/theanine.py:9: LangChainDeprecationWarning: Importing get_openai_callback from /users/9/chen7751/miniconda3/envs/theanine-lme/lib/python3.10/site-packages/langchain/callbacks/__init__.py is deprecated. Please replace deprecated imports:
+
+>> from /users/9/chen7751/miniconda3/envs/theanine-lme/lib/python3.10/site-packages/langchain/callbacks/__init__.py import get_openai_callback
+
+with new imports of:
+
+>> from langchain_community.callbacks.manager import get_openai_callback
+You can use the langchain cli to **automatically** upgrade many imports. Please see documentation here <https://python.langchain.com/v0.2/docs/versions/v0_2/>
+  from langchain.callbacks import get_openai_callback
+/users/9/chen7751/csci8980/Theanine/src/summarize.py:52: LangChainDeprecationWarning: The class `LLMChain` was deprecated in LangChain 0.1.17 and will be removed in 1.0. Use RunnableSequence, e.g., `prompt | llm` instead.
+  llm_chain = LLMChain(prompt=prompt, llm=self.llm)
+THEANINE->LongMemEval:   0%|          | 0/3 [47:51<?, ?q/s, fail=0, last=1da05512, ok=1]THEANINE->LongMemEval:  33%|███▎      | 1/3 [47:51<1:35:42, 2871.39s/q, fail=0, last=1da05512, ok=1]THEANINE->LongMemEval:  33%|███▎      | 1/3 [1:39:42<1:35:42, 2871.39s/q, fail=0, last=gpt4_a2d1d1f6, ok=2]THEANINE->LongMemEval:  67%|██████▋   | 2/3 [1:39:42<50:12, 3012.29s/q, fail=0, last=gpt4_a2d1d1f6, ok=2]  THEANINE->LongMemEval:  67%|██████▋   | 2/3 [2:37:25<50:12, 3012.29s/q, fail=0, last=07b6f563, ok=3]     THEANINE->LongMemEval: 100%|██████████| 3/3 [2:37:25<00:00, 3218.21s/q, fail=0, last=07b6f563, ok=3]THEANINE->LongMemEval: 100%|██████████| 3/3 [2:37:25<00:00, 3148.52s/q, fail=0, last=07b6f563, ok=3]

@@ -1,0 +1,11 @@
+============================================================
+[Fri Apr 10 09:01:43 CDT 2026] job=6168083 launching Anna unified-QA baseline+CF 10x5
+host=cn1123
+cwd=/users/9/chen7751/csci8980
+run_tag=s_50_unifiedqa_cf_04_09_18_11
+parallel_jobs=10
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
