@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import sys
@@ -185,6 +186,66 @@ def _call_with_cache(
         return original_create(completion_resource, *args, **kwargs)
 
 
+async def _async_call_with_cache(
+    original_create: Callable[..., Any],
+    completion_resource: object,
+    args: tuple[Any, ...],
+    kwargs: Dict[str, Any],
+) -> Any:
+    payload = _cache_payload(kwargs)
+    if not payload:
+        return await original_create(completion_resource, *args, **kwargs)
+
+    direct_kwargs = dict(kwargs)
+    direct_kwargs.update(payload)
+    cache_key = payload["prompt_cache_key"]
+
+    try:
+        response = await original_create(completion_resource, *args, **direct_kwargs)
+        _log_cache_usage(response, cache_key)
+        return response
+    except TypeError as exception:
+        if not _looks_cache_related(exception):
+            raise
+        _warn_once("OpenAI SDK rejected direct prompt cache kwargs; retrying with extra_body.")
+    except Exception as exception:
+        if not _looks_cache_related(exception):
+            raise
+        key_only_kwargs = _with_key_only(direct_kwargs, payload)
+        if key_only_kwargs is not None:
+            _warn_once("Prompt cache retention was rejected; retrying with prompt_cache_key only.")
+            try:
+                response = await original_create(completion_resource, *args, **key_only_kwargs)
+                _log_cache_usage(response, cache_key)
+                return response
+            except Exception as key_only_exception:
+                if not _looks_cache_related(key_only_exception):
+                    raise
+        _warn_once("OpenAI API rejected prompt cache parameters; retrying without cache hints.")
+        return await original_create(completion_resource, *args, **_without_cache(direct_kwargs))
+
+    extra_body_kwargs = _merge_extra_body(kwargs, payload)
+    try:
+        response = await original_create(completion_resource, *args, **extra_body_kwargs)
+        _log_cache_usage(response, cache_key)
+        return response
+    except Exception as exception:
+        if not _looks_cache_related(exception):
+            raise
+        key_only_kwargs = _with_key_only(extra_body_kwargs, payload)
+        if key_only_kwargs is not None:
+            _warn_once("Prompt cache retention was rejected via extra_body; retrying with prompt_cache_key only.")
+            try:
+                response = await original_create(completion_resource, *args, **_merge_extra_body(kwargs, {"prompt_cache_key": cache_key}))
+                _log_cache_usage(response, cache_key)
+                return response
+            except Exception as key_only_exception:
+                if not _looks_cache_related(key_only_exception):
+                    raise
+        _warn_once("OpenAI SDK/API rejected prompt cache hints; retrying without cache hints.")
+        return await original_create(completion_resource, *args, **kwargs)
+
+
 def install_openai_prompt_cache(default_agent: str) -> None:
     """Install a process-wide Chat Completions prompt-cache wrapper.
 
@@ -203,9 +264,9 @@ def install_openai_prompt_cache(default_agent: str) -> None:
             return
         try:
             try:
-                from openai.resources.chat.completions.completions import Completions
+                from openai.resources.chat.completions.completions import AsyncCompletions, Completions
             except Exception:
-                from openai.resources.chat.completions import Completions
+                from openai.resources.chat.completions import AsyncCompletions, Completions
         except Exception as exception:
             _warn_once(f"could not install OpenAI prompt cache wrapper: {exception}")
             return
@@ -217,4 +278,14 @@ def install_openai_prompt_cache(default_agent: str) -> None:
 
         setattr(cached_create, "_lme_prompt_cache_wrapped", True)
         Completions.create = cached_create
+        original_async_create = AsyncCompletions.create
+
+        async def cached_async_create(completion_resource: object, *args: Any, **kwargs: Any) -> Any:
+            result = _async_call_with_cache(original_async_create, completion_resource, args, kwargs)
+            if inspect.isawaitable(result):
+                return await result
+            return result
+
+        setattr(cached_async_create, "_lme_prompt_cache_wrapped", True)
+        AsyncCompletions.create = cached_async_create
         _PATCHED = True

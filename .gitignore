@@ -19,7 +19,7 @@ LongMemEval/*.trace.jsonl
 LongMemEval/*.jsonl.eval-results-*
 LongMemEval/*.eval-results-*
 LongMemEval/memoryos_progress_record.txt
-
+LongMemEval/
 # Bridge runtime artifacts
 theanine_longmemeval_bridge/runtime/
 chatgpt_project_eval/traces/
@@ -43,6 +43,8 @@ Theanine/resources/data/bridge_*.json
 # Generated runtime / copied experiment artifacts
 results/
 cf_only_runtime/
+external/.memory-benchmarks.setup.lock
+external/memory-benchmarks/
 Theanine_smoke_repo/
 Theanine_p1_repo/
 Theanine_p2_repo/

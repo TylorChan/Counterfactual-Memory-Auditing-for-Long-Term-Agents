@@ -188,6 +188,14 @@ PRIMARY_RETRIEVAL_ITEM_RULES: Dict[str, Dict[str, Tuple[str, ...]]] = {
         "stages": ("anna_long_term_retrieval",),
         "source_forms": ("anna_retrieved_text",),
     },
+    "mem0": {
+        "stages": ("mem0_search_result",),
+        "source_forms": ("mem0_memory",),
+    },
+    "mem0_official": {
+        "stages": ("mem0_official_search_result",),
+        "source_forms": ("mem0_official_memory",),
+    },
 }
 
 
@@ -577,6 +585,7 @@ def summarize_replay_cf(
             if rollback_answer_distances
             else 0.0
         ),
+        "rollback_max_answer_distance": max(rollback_answer_distances) if rollback_answer_distances else 0.0,
         "query_fragile": rollback_answer_flip_count > 0,
         "dominant_write_ids": dominance["dominant_write_ids"],
         "gold_dominant_write_ids": dominance["gold_dominant_write_ids"],

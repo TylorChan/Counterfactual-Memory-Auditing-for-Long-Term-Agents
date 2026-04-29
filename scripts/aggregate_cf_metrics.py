@@ -95,6 +95,7 @@ def main() -> None:
         answer_flip_rates = [float(row.get("rollback_answer_flip_rate") or 0.0) for row in agent_rows]
         abstention_flip_rates = [float(row.get("rollback_abstention_flip_rate") or 0.0) for row in agent_rows]
         answer_distances = [float(row.get("rollback_mean_answer_distance") or 0.0) for row in agent_rows]
+        max_answer_distances = [float(row.get("rollback_max_answer_distance") or 0.0) for row in agent_rows]
         fragility_flags = [1.0 if row.get("query_fragile") else 0.0 for row in agent_rows]
         retrieved_coverages = [float(row.get("retrieved_item_coverage") or 0.0) for row in agent_rows]
         prompt_coverages = [float(row.get("prompt_item_coverage") or 0.0) for row in agent_rows]
@@ -146,6 +147,9 @@ def main() -> None:
             "query_fragility_rate": mean(fragility_flags) if fragility_flags else 0.0,
             "abstention_flip_rate_mean": mean(abstention_flip_rates) if abstention_flip_rates else 0.0,
             "mean_answer_distance": mean(answer_distances) if answer_distances else 0.0,
+            "max_answer_distance_per_query_mean": mean(max_answer_distances) if max_answer_distances else 0.0,
+            "max_answer_distance_per_query_median": median(max_answer_distances) if max_answer_distances else 0.0,
+            "max_answer_distance_per_query_max": max(max_answer_distances) if max_answer_distances else 0.0,
             "mean_influence_per_query": mean(influence_means) if influence_means else 0.0,
             "mean_influence_per_query_median": median(influence_means) if influence_means else 0.0,
             "rollback_gini_mean": mean(ginis) if ginis else 0.0,

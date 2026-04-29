@@ -1,9 +1,0 @@
-campaign_dir=/users/9/chen7751/csci8980/LongMemEval/04_09_18_11
-log_dir=/users/9/chen7751/csci8980/LongMemEval/04_09_18_11/logs
-run_tag=s_50_unifiedqa_cf_04_09_18_11
-submitted_at=2026-04-09 18:11:01 CDT
-run_anna_unifiedqa_cf_5x10.slurm: Submitted batch job 6168083
-run_memoryos_unifiedqa_cf_5x10.slurm: Submitted batch job 6168084
-run_ldagent_unifiedqa_cf_5x10.slurm: Submitted batch job 6168085
-run_share_unifiedqa_cf_5x10.slurm: Submitted batch job 6168086
-run_theanine_unifiedqa_cf_5x10.slurm: Submitted batch job 6168087

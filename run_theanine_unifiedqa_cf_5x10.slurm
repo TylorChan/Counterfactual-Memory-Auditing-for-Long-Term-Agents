@@ -2,12 +2,12 @@
 # THEANINE-only unified-QA baseline+CF run, split into 15 parallel shards by default.
 
 #SBATCH --job-name=the_uqacf
-#SBATCH --partition=msismall
-#SBATCH --time=84:00:00
+#SBATCH --partition=msilong
+#SBATCH --time=96:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=15
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=120g
+#SBATCH --mem=112g
 #SBATCH --tmp=30g
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err

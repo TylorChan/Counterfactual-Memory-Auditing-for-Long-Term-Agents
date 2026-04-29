@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=15
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=90g
+#SBATCH --mem=40g
 #SBATCH --tmp=18g
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err

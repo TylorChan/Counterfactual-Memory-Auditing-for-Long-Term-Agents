@@ -21,7 +21,7 @@ from longmemeval_counterfactual import append_cf_outputs, build_cf_specs, summar
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run CF-only replays from existing baseline audit artifacts.")
-    parser.add_argument("--agent", required=True, choices=("anna", "share", "memoryos", "ldagent", "theanine"))
+    parser.add_argument("--agent", required=True, choices=("anna", "share", "memoryos", "ldagent", "theanine", "mem0"))
     parser.add_argument("--longmemeval-file", type=Path, required=True)
     parser.add_argument("--baseline-trace-jsonl", type=Path, required=True)
     parser.add_argument("--baseline-audit-queries", type=Path, default=None)
@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ld-agent-dir", type=Path, default=REPO_ROOT / "LD-Agent")
     parser.add_argument("--anna-agent-dir", type=Path, default=REPO_ROOT / "AnnaAgent")
     parser.add_argument("--theanine-dir", type=Path, default=REPO_ROOT / "Theanine")
+    parser.add_argument("--mem0-dir", type=Path, default=REPO_ROOT / "mem0")
     parser.add_argument("--runtime-dir", type=Path, default=REPO_ROOT / "cf_only_runtime")
     return parser.parse_args()
 
@@ -223,6 +224,73 @@ def run_memoryos(args: argparse.Namespace, entries: Dict[str, Dict], query_recor
             })
         run_records, query_summary = summarize_replay_cf(
             agent="memoryos",
+            entry=entry,
+            baseline_query_record=baseline_qr,
+            write_records=write_records,
+            cf_results=cf_results,
+            dominance_threshold=args.cf_dominance_threshold,
+        )
+        append_cf_outputs(run_path=run_path, query_path=query_path, run_records=run_records, query_summary=query_summary)
+
+
+def run_mem0(args: argparse.Namespace, entries: Dict[str, Dict], query_records: List[Dict], writes_by_qid: Dict[str, List[Dict]], run_path: Path, query_path: Path) -> None:
+    import mem0_longmemeval_bridge.run_infer as mem0_bridge
+
+    mem0_args = _parse_module_args(
+        mem0_bridge.parse_args,
+        [
+            "--mem0-dir", str(args.mem0_dir),
+            "--longmemeval-file", str(args.longmemeval_file),
+            "--out-jsonl", str(args.runtime_dir / "dummy_mem0.jsonl"),
+            "--trace-jsonl", str(args.runtime_dir / "dummy_mem0.trace.jsonl"),
+            "--openai-base-url", args.openai_base_url,
+            "--llm-model", args.llm_model,
+        ],
+    )
+    api_key = mem0_args.openai_api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Missing OPENAI_API_KEY for mem0 CF-only run.")
+    per_sample_root = args.runtime_dir / "mem0_cf_only"
+    per_sample_root.mkdir(parents=True, exist_ok=True)
+    pbar = tqdm(query_records, total=len(query_records), desc="mem0 CF-only", unit="q")
+    for idx, baseline_qr in enumerate(pbar, start=1):
+        qid = str(baseline_qr["question_id"])
+        entry = entries[qid]
+        write_records = writes_by_qid.get(qid, [])
+        events = mem0_bridge.collect_mem0_write_events(entry, mem0_args.preserve_session_order)
+        specs = _filter_specs(build_cf_specs(
+            question_type=str(baseline_qr.get("question_type") or entry.get("question_type") or "unknown"),
+            query_record=baseline_qr,
+            write_records=write_records,
+            answer_session_ids=entry.get("answer_session_ids", []),
+            max_writes=args.cf_max_writes,
+            scope=args.cf_target_scope,
+        ), args.cf_rule_mode)
+        # mem0 is intentionally rollback-only for the first CF pass.
+        specs = [spec for spec in specs if getattr(spec, "rule_id", "") == "rollback_skip"]
+        cf_results = []
+        for spec in specs:
+            mutated_events, target_timestamp = mem0_bridge.apply_mem0_cf_spec(events, spec)
+            outcome = mem0_bridge.run_mem0_replay(
+                entry=entry,
+                events=mutated_events,
+                args=mem0_args,
+                sample_storage_root=per_sample_root,
+                sample_tag=f"{idx:03d}_{qid}_{spec.rule_id}_{spec.target_write_id[:8]}",
+            )
+            cf_results.append({
+                "spec": spec,
+                "cf_answer": outcome["hypothesis"],
+                "cf_retrieved_write_ids": outcome["query_record"].get("retrieved_write_ids", []),
+                "cf_prompt_write_ids": outcome["query_record"].get("prompt_write_ids", []),
+                "target_timestamp": target_timestamp,
+                "cf_extra": {
+                    "n_search_results": outcome["trace"].get("n_search_results"),
+                    "n_add_results": outcome["trace"].get("n_add_results"),
+                },
+            })
+        run_records, query_summary = summarize_replay_cf(
+            agent="mem0",
             entry=entry,
             baseline_query_record=baseline_qr,
             write_records=write_records,
@@ -478,6 +546,8 @@ def main() -> None:
         run_share(args, entries, query_records, writes_by_qid, run_path, query_path)
     elif args.agent == "memoryos":
         run_memoryos(args, entries, query_records, writes_by_qid, run_path, query_path)
+    elif args.agent == "mem0":
+        run_mem0(args, entries, query_records, writes_by_qid, run_path, query_path)
     elif args.agent == "ldagent":
         run_ldagent(args, entries, query_records, writes_by_qid, run_path, query_path)
     elif args.agent == "anna":

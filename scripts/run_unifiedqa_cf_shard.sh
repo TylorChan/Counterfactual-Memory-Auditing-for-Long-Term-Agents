@@ -158,6 +158,22 @@ case "${AGENT}" in
       "${CF_ARGS[@]}"
     ;;
 
+  mem0)
+    conda activate mem0-lme
+      python "${WORKDIR}/mem0_longmemeval_bridge/run_infer.py" \
+      --mem0-dir "${MEM0_REPO_DIR:-${WORKDIR}/mem0}" \
+      --longmemeval-file "${DATA_FILE}" \
+      --out-jsonl "${OUTPUT_ROOT}/preds_mem0_${OUTPUT_SUFFIX}.jsonl" \
+      --trace-jsonl "${OUTPUT_ROOT}/preds_mem0_${OUTPUT_SUFFIX}.trace.jsonl" \
+      --runtime-storage "${OUTPUT_ROOT}/mem0_runtime_${OUTPUT_SUFFIX}" \
+      --openai-base-url "${OPENAI_BASE_URL}" \
+      --llm-model "${LLM_MODEL}" \
+      --top-k "${MEM0_TOP_K:-50}" \
+      "${LIMIT_ARGS[@]}" \
+      "${OFFSET_ARGS[@]}" \
+      "${CF_ARGS[@]}"
+    ;;
+
   ldagent)
     conda activate ld-lme
       python "${WORKDIR}/ldagent_longmemeval_bridge/run_infer.py" \
