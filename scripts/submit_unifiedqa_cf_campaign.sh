@@ -85,11 +85,11 @@ submit_job() {
   echo "${script_name}: ${output}" | tee -a "${MANIFEST}"
 }
 
-submit_job "run_anna_unifiedqa_cf_5x10.slurm"
-submit_job "run_memoryos_unifiedqa_cf_5x10.slurm"
-submit_job "run_ldagent_unifiedqa_cf_5x10.slurm"
-submit_job "run_share_unifiedqa_cf_5x10.slurm"
-submit_job "run_theanine_unifiedqa_cf_5x10.slurm"
+submit_job "slurms/run_anna_unifiedqa_cf_5x10.slurm"
+submit_job "slurms/run_memoryos_unifiedqa_cf_5x10.slurm"
+submit_job "slurms/run_ldagent_unifiedqa_cf_5x10.slurm"
+submit_job "slurms/run_share_unifiedqa_cf_5x10.slurm"
+submit_job "slurms/run_theanine_unifiedqa_cf_5x10.slurm"
 
 echo "All jobs submitted."
 echo "Campaign outputs will be written under: ${CAMPAIGN_DIR}"

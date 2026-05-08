@@ -1,6 +1,0 @@
-============================================================
-====================== AGENT: THEANINE ======================
-============================================================
-[Fri Mar  6 18:57:50 CST 2026] Run THEANINE
-Loaded environment from /users/9/chen7751/csci8980/.env
-FAIL qid=1da05512: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}

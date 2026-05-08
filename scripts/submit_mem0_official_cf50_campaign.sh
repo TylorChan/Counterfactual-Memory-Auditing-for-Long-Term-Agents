@@ -160,7 +160,7 @@ output="$(
     sbatch \
     --output "${LOG_DIR}/%x_%j.out" \
     --error "${LOG_DIR}/%x_%j.err" \
-    "${WORKDIR}/run_mem0_official_longmemeval_cf_10way.slurm"
+    "${WORKDIR}/slurms/run_mem0_official_longmemeval_cf_10way.slurm"
 )"
 
 echo "run_mem0_official_longmemeval_cf_10way.slurm: ${output}" | tee -a "${MANIFEST}"

@@ -87,7 +87,7 @@ output="$(
     sbatch \
     --output "${LOG_DIR}/%x_%j.out" \
     --error "${LOG_DIR}/%x_%j.err" \
-    "${WORKDIR}/run_mem0_unifiedqa_cf_5x10.slurm"
+    "${WORKDIR}/slurms/run_mem0_unifiedqa_cf_5x10.slurm"
 )"
 
 echo "run_mem0_unifiedqa_cf_5x10.slurm: ${output}" | tee -a "${MANIFEST}"

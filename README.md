@@ -27,7 +27,7 @@ This project evaluates long-term memory agents with counterfactual memory auditi
 - `longmemeval_unified_answer.py`: unified LongMemEval answer prompt used across bridges.
 - `openai_prompt_cache.py`: OpenAI prompt-cache wrapper and token logging.
 - `scripts/`: smoke tests, MSI submitters, shard runners, and aggregation scripts.
-- `run_*_unifiedqa_cf_5x10.slurm`: MSI Slurm job files for the main agents.
+- `slurms/run_*_unifiedqa_cf_5x10.slurm`: MSI Slurm job files for the main agents.
 - `papers/`: local copies of the agent papers.
 - `report/`: ACL-style final report source and figures.
 
@@ -38,11 +38,11 @@ The upstream agent repositories are included as local folders: `AnnaAgent/`, `SH
 Create a `.env` file in the repo root with OpenAI keys. For MSI shard runs, multiple keys can be used:
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_API_KEY_1=sk-...
-OPENAI_API_KEY_2=sk-...
+OPENAI_API_KEY=<OPENAI_API_KEY>
+OPENAI_API_KEY_1=<OPENAI_API_KEY_1>
+OPENAI_API_KEY_2=<OPENAI_API_KEY_2>
 ...
-OPENAI_API_KEY_10=sk-...
+OPENAI_API_KEY_10=<OPENAI_API_KEY_10>
 ```
 
 Do not commit `.env` or generated runtime folders. The run scripts load `.env` automatically.

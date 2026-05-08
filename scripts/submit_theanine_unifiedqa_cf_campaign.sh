@@ -61,7 +61,7 @@ mkdir -p "${LOG_DIR}"
   echo "log_dir=${LOG_DIR}"
   echo "run_tag=${RUN_TAG}"
   echo "agent=theanine"
-  echo "slurm_script=run_theanine_unifiedqa_cf_5x10.slurm"
+  echo "slurm_script=slurms/run_theanine_unifiedqa_cf_5x10.slurm"
   echo "partition=msilong"
   echo "llm_model=${LLM_MODEL:-gpt-4o-mini}"
   echo "data_file=${DATA_FILE}"
@@ -80,7 +80,7 @@ output="$(
     sbatch \
     --output "${LOG_DIR}/%x_%j.out" \
     --error "${LOG_DIR}/%x_%j.err" \
-    "${WORKDIR}/run_theanine_unifiedqa_cf_5x10.slurm"
+    "${WORKDIR}/slurms/run_theanine_unifiedqa_cf_5x10.slurm"
 )"
 
 echo "run_theanine_unifiedqa_cf_5x10.slurm: ${output}" | tee -a "${MANIFEST}"

@@ -1,6 +1,8 @@
 .env
+.codex
 data_backups/
 .venv-chatgpt-eval/
+.tmp_*.txt
 chatgpt_project_eval/profile.local.json
 chatgpt_project_eval/traces/
 LongMemEval/preds_chatgpt_project_memory*.jsonl
@@ -32,6 +34,8 @@ chatgpt_web_eval/chrome_cdp_profile/
 
 # Temporary / scratch outputs
 tmp_share/
+old_logs/
+old_slurms/
 *.log
 # Slurm stdout / stderr
 # *.out
@@ -55,11 +59,7 @@ LongMemEval/merged/
 # Local planning / generated analysis artifacts
 LongMemEval/*.query_matrix.json
 tmp/smoke_metrics_*.json
-slide_formula_snippets.aux
-slide_formula_snippets.fdb_latexmk
-slide_formula_snippets.fls
-slide_formula_snippets.pdf
-slide_formula_snippets.synctex.gz
+slide_formula_snippets.*
 
 paper_presentation
 
