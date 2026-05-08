@@ -118,10 +118,14 @@ def _log_cache_usage(response: object, cache_key: str) -> None:
         return
     usage = getattr(response, "usage", None)
     prompt_tokens = _usage_value(usage, "prompt_tokens")
+    completion_tokens = _usage_value(usage, "completion_tokens")
+    total_tokens = _usage_value(usage, "total_tokens")
     cached_tokens = _cached_tokens(usage)
-    if prompt_tokens or cached_tokens:
+    if prompt_tokens or cached_tokens or completion_tokens or total_tokens:
         print(
-            f"[prompt-cache] key={cache_key} prompt_tokens={prompt_tokens} cached_tokens={cached_tokens}",
+            f"[prompt-cache] key={cache_key} prompt_tokens={prompt_tokens} "
+            f"cached_tokens={cached_tokens} completion_tokens={completion_tokens} "
+            f"total_tokens={total_tokens}",
             file=sys.stderr,
         )
 

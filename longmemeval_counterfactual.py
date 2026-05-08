@@ -50,8 +50,18 @@ def derive_cf_paths(trace_path: Optional[Path]) -> Tuple[Optional[Path], Optiona
 def parse_dt(raw: object) -> Optional[datetime]:
     if raw is None:
         return None
+    if isinstance(raw, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(raw))
+        except (OSError, OverflowError, ValueError):
+            return None
     text = str(raw).strip()
     if not text:
+        return None
+    try:
+        if text.replace(".", "", 1).isdigit():
+            return datetime.fromtimestamp(float(text))
+    except (OSError, OverflowError, ValueError):
         return None
     for fmt in (
         "%Y/%m/%d (%a) %H:%M",
