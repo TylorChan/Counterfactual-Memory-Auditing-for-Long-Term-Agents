@@ -1,0 +1,13 @@
+run_tag=mem0_official_smoke_04_29_02_42
+backend=cloud
+answerer_model=gpt-4o-mini
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+limit=1
+offset=2
+top_k=200
+answer_cutoff=200
+enable_cf_wrapper=1
+cf_rule_mode=rollback-only
+cf_target_scope=prompt
+cf_max_writes=1
+bench_dir=/users/9/chen7751/csci8980/external/memory-benchmarks

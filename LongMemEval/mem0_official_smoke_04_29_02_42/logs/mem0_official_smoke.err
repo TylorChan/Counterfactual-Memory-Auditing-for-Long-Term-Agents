@@ -1,0 +1,39 @@
+MEM0-OFFICIAL:   0%|          | 0/1 [00:00<?, ?q/s]ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 4/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 5/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD failed after 5 attempts for user=lme_c8c3f81d_base_0429024302_0001
+ADD attempt 1/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_c8c3f81d_base_0429024302_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'

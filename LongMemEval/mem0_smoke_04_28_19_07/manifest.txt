@@ -1,0 +1,16 @@
+run_tag=mem0_smoke_04_28_19_07
+output_root=/users/9/chen7751/csci8980/LongMemEval/mem0_smoke_04_28_19_07
+log_root=/users/9/chen7751/csci8980/LongMemEval/mem0_smoke_04_28_19_07/logs
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+total_questions=10
+offset=0
+part_tag=smoke10
+key_var=OPENAI_API_KEY_1
+llm_model=gpt-4o-mini
+openai_base_url=https://api.openai.com/v1
+cf_target_scope=candidate
+cf_max_writes=1
+cf_dominance_threshold=0.75
+enable_cf_wrapper=1
+mem0_top_k=50
+started_at=2026-04-28 19:07:54 CDT

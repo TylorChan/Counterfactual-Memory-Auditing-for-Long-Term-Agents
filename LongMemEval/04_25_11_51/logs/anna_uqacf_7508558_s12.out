@@ -1,0 +1,24 @@
+============================================================
+[Sat Apr 25 20:12:01 CDT 2026] agent=anna part=s12 offset=76 limit=6
+host=n1
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_2
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 6 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+FAIL qid=50635ada: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 6240. Please try again in 37ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+FAIL qid=f685340e: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 9999154, Requested 2275. Please try again in 8ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+FAIL qid=10e09553: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 2679. Please try again in 16ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+FAIL qid=5c40ec5b: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 6376. Please try again in 38ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+Done. success=2 failed=4 total=6 time=213.0s out=/users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s12.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s12.trace.jsonl
+[Sat Apr 25 20:15:38 CDT 2026] Completed agent=anna part=s12

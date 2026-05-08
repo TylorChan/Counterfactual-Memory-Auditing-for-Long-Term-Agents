@@ -1,0 +1,74 @@
+AnnaAgent->LongMemEval:   0%|          | 0/6 [00:00<?, ?q/s][prompt-cache] OpenAI SDK rejected direct prompt cache kwargs; retrying with extra_body.
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6678 cached_tokens=3072
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6121 cached_tokens=3072
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6681 cached_tokens=3072
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6749 cached_tokens=6656
+AnnaAgent->LongMemEval:   0%|          | 0/6 [00:36<?, ?q/s, elapsed_s=36.3, fail=0, last=41698283, ok=1]AnnaAgent->LongMemEval:  17%|█▋        | 1/6 [00:36<03:01, 36.32s/q, elapsed_s=36.3, fail=0, last=41698283, ok=1][prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5703 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6287 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=6314 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=5995 cached_tokens=5888
+AnnaAgent->LongMemEval:  17%|█▋        | 1/6 [01:27<03:01, 36.32s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2]AnnaAgent->LongMemEval:  33%|███▎      | 2/6 [01:27<02:59, 44.98s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2][prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3462 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3629 cached_tokens=1024
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3851 cached_tokens=0
+                                                                                                                 AnnaAgent->LongMemEval:  33%|███▎      | 2/6 [01:40<02:59, 44.98s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2]AnnaAgent->LongMemEval:  50%|█████     | 3/6 [01:40<01:31, 30.61s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2][prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3797 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=4067 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=4096 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=3584
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3645 cached_tokens=0
+                                                                                                                 AnnaAgent->LongMemEval:  50%|█████     | 3/6 [02:37<01:31, 30.61s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2]AnnaAgent->LongMemEval:  67%|██████▋   | 4/6 [02:37<01:21, 40.81s/q, elapsed_s=87.4, fail=0, last=2698e78f, ok=2][prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=4266 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=4244 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=4263 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=3948 cached_tokens=3840
+AnnaAgent->LongMemEval:  67%|██████▋   | 4/6 [03:16<01:21, 40.81s/q, elapsed_s=196.3, fail=2, last=4b24c848, ok=3]AnnaAgent->LongMemEval:  83%|████████▎ | 5/6 [03:16<00:40, 40.14s/q, elapsed_s=196.3, fail=2, last=4b24c848, ok=3][prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2819 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2508 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2411 cached_tokens=0
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+[prompt-cache] key=lme-longmemeval:anna:gpt-4o-mini prompt_tokens=2464 cached_tokens=2432
+AnnaAgent->LongMemEval:  83%|████████▎ | 5/6 [04:03<00:40, 40.14s/q, elapsed_s=243.2, fail=2, last=7e974930, ok=4]AnnaAgent->LongMemEval: 100%|██████████| 6/6 [04:03<00:00, 42.44s/q, elapsed_s=243.2, fail=2, last=7e974930, ok=4]AnnaAgent->LongMemEval: 100%|██████████| 6/6 [04:03<00:00, 40.53s/q, elapsed_s=243.2, fail=2, last=7e974930, ok=4]

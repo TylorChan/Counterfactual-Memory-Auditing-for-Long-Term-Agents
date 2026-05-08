@@ -1,0 +1,22 @@
+============================================================
+[Sat Apr 25 20:12:41 CDT 2026] agent=anna part=s14 offset=88 limit=6
+host=n1
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_4
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 6 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+FAIL qid=488d3006: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 4954. Please try again in 29ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+FAIL qid=8752c811: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 8581. Please try again in 51ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+Done. success=4 failed=2 total=6 time=199.5s out=/users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s14.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s14.trace.jsonl
+[Sat Apr 25 20:16:06 CDT 2026] Completed agent=anna part=s14

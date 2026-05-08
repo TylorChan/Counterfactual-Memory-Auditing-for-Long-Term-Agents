@@ -1,0 +1,20 @@
+============================================================
+[Sun Apr 26 11:41:36 CDT 2026] agent=memoryos part=s10 offset=63 limit=7
+host=n27
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_10
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 7 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+Done. success=7 failed=0 total=7 time=174454.5s out=/users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_memoryos_s_100_unifiedqa_cf_04_25_11_51_s10.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_memoryos_s_100_unifiedqa_cf_04_25_11_51_s10.trace.jsonl
+[Tue Apr 28 12:09:14 CDT 2026] Completed agent=memoryos part=s10

@@ -1,0 +1,8 @@
+{"question_id": "488d3006", "hypothesis": "The hiking trail recommended is the GR-90."}
+{"question_id": "488d3006", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 4954. Please try again in 29ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "1d4da289", "hypothesis": "Biometric authentication or one-time passwords (OTP)."}
+{"question_id": "8aef76bc", "hypothesis": "Mod Podge or another sealant."}
+{"question_id": "8752c811", "hypothesis": "I don't know."}
+{"question_id": "8752c811", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 8581. Please try again in 51ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "3e321797", "hypothesis": "You should leave it on for 10 minutes."}
+{"question_id": "e982271f", "hypothesis": "I don't know."}

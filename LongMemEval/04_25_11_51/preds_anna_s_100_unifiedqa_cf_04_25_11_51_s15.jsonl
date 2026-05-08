@@ -1,0 +1,7 @@
+{"question_id": "352ab8bd", "hypothesis": "I don't know."}
+{"question_id": "fca762bc", "hypothesis": "Memrise"}
+{"question_id": "fca762bc", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 5455. Please try again in 32ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "41275add", "hypothesis": "\"How to Sit Properly at a Desk to Avoid Back Pain\" by the Mayo Clinic: <https://www.youtube.com/watch?v=UfOvNlX9Hh0>"}
+{"question_id": "4baee567", "hypothesis": "I don't know."}
+{"question_id": "28bcfaac", "hypothesis": "MusicTheory.net"}
+{"question_id": "65240037", "hypothesis": "The recommended ratio is 1:10."}

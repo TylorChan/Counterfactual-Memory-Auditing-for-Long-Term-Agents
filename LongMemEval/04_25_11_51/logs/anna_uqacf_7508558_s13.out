@@ -1,0 +1,25 @@
+============================================================
+[Sat Apr 25 20:12:22 CDT 2026] agent=anna part=s13 offset=82 limit=6
+host=n1
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_3
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 6 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+FAIL qid=2698e78f_abs: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 3886. Please try again in 23ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+FAIL qid=2133c1b5_abs: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 4024. Please try again in 24ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+ChatCompletion(id='chatcmpl-DYiMr6bOsLeIOShy39fltAUmzS5ry', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content=None, role='assistant', function_call=None, tool_calls=[ChatCompletionMessageToolCall(id='call_uhEUawWv3bjp1Ot5ogE3ecUZ', function=Function(arguments='{"knowledge":"This pillar page focuses on lean production strategies in logistics management, targeting logistics managers and providing insights into how to implement lean techniques to enhance efficiency and productivity."}', name='search_knowledge'), type='function')], refusal=None, annotations=[]))], created=1777166073, model='gpt-4o-mini-2024-07-18', object='chat.completion', system_fingerprint='fp_e61ea1dda4', usage=CompletionUsage(completion_tokens=34, prompt_tokens=663, total_tokens=697, prompt_tokens_details={'cached_tokens': 0, 'audio_tokens': 0}, completion_tokens_details={'reasoning_tokens': 0, 'audio_tokens': 0, 'accepted_prediction_tokens': 0, 'rejected_prediction_tokens': 0}), service_tier='default')
+ChatCompletion(id='chatcmpl-DYiN2S1toUCbrLf4CVXCoBlJyxMAU', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content=None, role='assistant', function_call=None, tool_calls=[ChatCompletionMessageToolCall(id='call_d4ERVTc0D4ZbQzzKvHHm6Bc1', function=Function(arguments='{"knowledge":"South Island Hiking Adventures"}', name='search_knowledge'), type='function')], refusal=None, annotations=[]))], created=1777166084, model='gpt-4o-mini-2024-07-18', object='chat.completion', system_fingerprint='fp_e61ea1dda4', usage=CompletionUsage(completion_tokens=8, prompt_tokens=646, total_tokens=654, prompt_tokens_details={'cached_tokens': 0, 'audio_tokens': 0}, completion_tokens_details={'reasoning_tokens': 0, 'audio_tokens': 0, 'accepted_prediction_tokens': 0, 'rejected_prediction_tokens': 0}), service_tier='default')
+FAIL qid=e9327a54: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 3485. Please try again in 20ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+Done. success=3 failed=3 total=6 time=245.6s out=/users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s13.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_anna_s_100_unifiedqa_cf_04_25_11_51_s13.trace.jsonl
+[Sat Apr 25 20:16:34 CDT 2026] Completed agent=anna part=s13

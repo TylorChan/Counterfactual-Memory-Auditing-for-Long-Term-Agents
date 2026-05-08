@@ -1,0 +1,17 @@
+============================================================
+[Mon Apr 27 02:42:21 CDT 2026] agent=theanine part=s1 offset=0 limit=7
+host=cn1069
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_1
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=2
+cf_dominance_threshold=0.75
+theanine_repo_candidate=/users/9/chen7751/csci8980/cf_runtime/s_100_unifiedqa_cf_04_25_11_51/theanine_repos/Theanine_s1_repo
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env

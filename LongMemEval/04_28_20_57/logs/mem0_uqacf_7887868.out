@@ -1,0 +1,15 @@
+============================================================
+[Tue Apr 28 20:59:57 CDT 2026] job=7887868 launching mem0 unified-QA baseline+rollback-CF 15 shards over 100 questions
+host=cn1028
+cwd=/users/9/chen7751/csci8980
+run_tag=s_100_unifiedqa_cf_mem0_04_28_20_57
+llm_model=gpt-4o-mini
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+parallel_jobs=15
+key_slots=10
+mem0_top_k=50
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=3
+cf_dominance_threshold=0.75
+============================================================

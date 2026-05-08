@@ -1,0 +1,20 @@
+============================================================
+[Sun Apr 26 20:05:05 CDT 2026] agent=share part=s15 offset=94 limit=6
+host=cn1130
+cwd=/users/9/chen7751/csci8980
+key_var=OPENAI_API_KEY_5
+data_file=/users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+prompt_cache_enabled=1
+prompt_cache_key_prefix=lme-longmemeval
+prompt_cache_log=1
+prompt_cache_retention=
+enable_cf_wrapper=1
+cf_target_scope=prompt
+cf_max_writes=2
+cf_dominance_threshold=0.75
+============================================================
+Loaded environment from /users/9/chen7751/csci8980/.env
+Loaded 6 samples from /users/9/chen7751/csci8980/LongMemEval/data/longmemeval_s_cleaned_100_balanced_seed8980.json
+Done. success=6 failed=0 total=6 time=81435.5s out=/users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_share_s_100_unifiedqa_cf_04_25_11_51_s15.jsonl
+Trace saved to: /users/9/chen7751/csci8980/LongMemEval/04_25_11_51/preds_share_s_100_unifiedqa_cf_04_25_11_51_s15.trace.jsonl
+[Mon Apr 27 18:42:23 CDT 2026] Completed agent=share part=s15

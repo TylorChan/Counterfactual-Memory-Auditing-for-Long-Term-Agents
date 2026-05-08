@@ -1,0 +1,8 @@
+{"question_id": "41698283", "hypothesis": "50mm prime lens"}
+{"question_id": "2698e78f", "hypothesis": "Every two weeks."}
+{"question_id": "7a87bd0c", "hypothesis": "I don't know."}
+{"question_id": "7a87bd0c", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 4044. Please try again in 24ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "b01defab", "hypothesis": "Yes, you finished reading 'The Nightingale' by Kristin Hannah."}
+{"question_id": "b01defab", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 4505. Please try again in 27ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "4b24c848", "hypothesis": "Five tops."}
+{"question_id": "7e974930", "hypothesis": "$420"}

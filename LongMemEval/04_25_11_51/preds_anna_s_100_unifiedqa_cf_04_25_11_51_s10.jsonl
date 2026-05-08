@@ -1,0 +1,8 @@
+{"question_id": "gpt4_9a159967", "hypothesis": "I don't know."}
+{"question_id": "gpt4_d9af6064", "hypothesis": "I don't know."}
+{"question_id": "gpt4_d9af6064", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 6253. Please try again in 37ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "gpt4_c27434e8", "hypothesis": "You started the Japanese Zero fighter plane model first, about a month ago."}
+{"question_id": "8c18457d", "hypothesis": "7 days."}
+{"question_id": "gpt4_93159ced_abs", "hypothesis": "I don't know."}
+{"question_id": "852ce960", "hypothesis": "$350,000"}
+{"question_id": "031748ae", "hypothesis": "I lead a team of 4 engineers when I just started my new role as Senior Software Engineer, and I now lead a team of 5 engineers."}

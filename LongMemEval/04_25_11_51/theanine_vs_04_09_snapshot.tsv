@@ -1,0 +1,23 @@
+metric	04_09_full50	04_25_partial100_snapshot
+preds	50	88
+cf_queries	50	75
+cf_runs	334	494
+answer_flip_rate_mean	0.42	0.43333333333333335
+query_fragility_rate	0.58	0.5333333333333333
+abstention_flip_rate_mean	0.28	0.2733333333333333
+mean_answer_distance	0.2872856211613148	0.29248815335262635
+mean_influence_per_query	1.0036197376783276	1.0244814795812858
+median_influence_per_query	1.044584582084582	0.9044435956200663
+rollback_gini_mean	0.1517772546191476	0.10959718031719438
+rollback_gini_median	0.0846659553240161	0.05102040816326503
+baseline_retrieval_correct_rate	1	1
+baseline_exposure_correct_rate	None	1
+retrieved_item_coverage_mean	1.0	1.0
+prompt_item_coverage_mean	1.0	1.0
+etdl_count	22	26
+etdl_mean_days	28.878661616161615	26.65889423076923
+etdl_median_days	5.045833333333333	7.742361111111111
+etdl_max_days	220.43055555555554	220.43055555555554
+dominance_label_counts	{'ambiguous': 6, 'no_effect': 21, 'gold_dominant': 22, 'non_gold_dominant': 1}	{'gold_dominant': 25, 'ambiguous': 13, 'no_effect': 35, 'non_gold_dominant': 2}
+confusion	{'retrieved_correct_non_dominant': 28, 'retrieved_correct_dominant': 22}	{'retrieved_correct_dominant': 25, 'retrieved_correct_non_dominant': 50}
+question_type_counts	{'temporal-reasoning': 9, 'knowledge-update': 8, 'single-session-assistant': 8, 'multi-session': 9, 'single-session-preference': 8, 'single-session-user': 8}	{'single-session-user': 12, 'temporal-reasoning': 12, 'knowledge-update': 10, 'single-session-assistant': 13, 'multi-session': 15, 'single-session-preference': 13}

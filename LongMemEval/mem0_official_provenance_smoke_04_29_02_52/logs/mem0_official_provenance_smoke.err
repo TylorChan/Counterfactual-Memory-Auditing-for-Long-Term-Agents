@@ -1,0 +1,4 @@
+MEM0-OFFICIAL:   0%|          | 0/1 [00:00<?, ?q/s]
+Ingest 852ce960 base_0429025253_0001:   0%|          | 0/199 [00:00<?, ?write/s][AADD attempt 1/5 failed (user=lme_852ce960_base_0429025253_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 2/5 failed (user=lme_852ce960_base_0429025253_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'
+ADD attempt 3/5 failed (user=lme_852ce960_base_0429025253_0001): 400, message='Bad Request', url='https://api.mem0.ai/v3/memories/'

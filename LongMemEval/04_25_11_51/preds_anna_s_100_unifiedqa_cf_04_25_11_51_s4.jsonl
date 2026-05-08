@@ -1,0 +1,9 @@
+{"question_id": "2318644b", "hypothesis": "I don't know."}
+{"question_id": "2788b940", "hypothesis": "I don't know."}
+{"question_id": "2788b940", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 10087. Please try again in 60ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "gpt4_194be4b3", "hypothesis": "I don't know."}
+{"question_id": "gpt4_ab202e7f", "hypothesis": "I don't know."}
+{"question_id": "edced276", "hypothesis": "I don't know."}
+{"question_id": "edced276", "hypothesis": "ERROR: LLM call failed: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o-mini in organization org-PGuEKLi7JP7VfaGjoKEeAw4h on tokens per min (TPM): Limit 10000000, Used 10000000, Requested 7105. Please try again in 42ms. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}"}
+{"question_id": "bf659f65", "hypothesis": "I don't know."}
+{"question_id": "gpt4_2f91af09", "hypothesis": "I don't know."}
