@@ -13,13 +13,13 @@ __pycache__/
 *.pyc
 
 # LongMemEval predictions / traces / eval artifacts
-LongMemEval/data/longmemeval_s_cleaned.json
-LongMemEval/preds_*.jsonl
-LongMemEval/*.trace.jsonl
-LongMemEval/*.jsonl.eval-results-*
-LongMemEval/*.eval-results-*
-LongMemEval/memoryos_progress_record.txt
-LongMemEval/
+# LongMemEval/data/longmemeval_s_cleaned.json
+# LongMemEval/preds_*.jsonl
+# LongMemEval/*.trace.jsonl
+# LongMemEval/*.jsonl.eval-results-*
+# LongMemEval/*.eval-results-*
+# LongMemEval/memoryos_progress_record.txt
+# LongMemEval/
 # Bridge runtime artifacts
 theanine_longmemeval_bridge/runtime/
 chatgpt_project_eval/traces/
@@ -65,3 +65,7 @@ paper_presentation
 
 report/
 AGENTS.md
+currentplan.md
+findings.md
+counterfactual_design.md
+project_idea.md
