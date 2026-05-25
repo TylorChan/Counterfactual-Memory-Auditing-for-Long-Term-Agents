@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="380" viewBox="0 0 1120 380" role="img" aria-labelledby="title desc">
+  <title id="title">Key Findings</title>
+  <desc id="desc">Four key findings about counterfactual memory auditing for long-term agents.</desc>
+  <rect width="1120" height="380" rx="18" fill="#FFFFFF"/>
+  <rect x="1" y="1" width="1118" height="378" rx="17" fill="none" stroke="#D9DEEA" stroke-width="2"/>
+
+  <text x="48" y="58" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#0B0F19">Key Findings</text>
+  <text x="48" y="86" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#536074">Counterfactual auditing separates final correctness from how memory actually controls the answer.</text>
+
+  <rect x="48" y="118" width="496" height="96" rx="12" fill="#F7F9FF" stroke="#D9DEEA"/>
+  <rect x="48" y="118" width="6" height="96" rx="3" fill="#1131F5"/>
+  <text x="78" y="150" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#1131F5">01</text>
+  <text x="118" y="150" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="#1131F5">Accuracy hides memory failure modes</text>
+  <text x="118" y="178" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">Two agents can have similar final accuracy while using</text>
+  <text x="118" y="200" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">memory in different ways.</text>
+
+  <rect x="576" y="118" width="496" height="96" rx="12" fill="#F7FFFD" stroke="#D9DEEA"/>
+  <rect x="576" y="118" width="6" height="96" rx="3" fill="#009B8E"/>
+  <text x="606" y="150" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#009B8E">02</text>
+  <text x="646" y="150" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="#009B8E">Retrieval is not causal control</text>
+  <text x="646" y="178" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">An agent can retrieve the right memory while stale or</text>
+  <text x="646" y="200" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">conflicting evidence still shapes the answer.</text>
+
+  <rect x="48" y="236" width="496" height="96" rx="12" fill="#FFF8FC" stroke="#D9DEEA"/>
+  <rect x="48" y="236" width="6" height="96" rx="3" fill="#C026D3"/>
+  <text x="78" y="268" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#C026D3">03</text>
+  <text x="118" y="268" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="#C026D3">Influence can be concentrated</text>
+  <text x="118" y="296" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">Some agents depend heavily on a small number of</text>
+  <text x="118" y="318" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">memory writes.</text>
+
+  <rect x="576" y="236" width="496" height="96" rx="12" fill="#FFFCF5" stroke="#D9DEEA"/>
+  <rect x="576" y="236" width="6" height="96" rx="3" fill="#D97706"/>
+  <text x="606" y="268" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="800" fill="#D97706">04</text>
+  <text x="646" y="268" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="#D97706">Memory design should match the task</text>
+  <text x="646" y="296" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">Dialogue-continuity systems do not always work well</text>
+  <text x="646" y="318" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#0B0F19">for fine-grained factual memory QA.</text>
+</svg>

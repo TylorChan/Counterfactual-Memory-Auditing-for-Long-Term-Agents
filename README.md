@@ -10,10 +10,7 @@ Read the full report: [Beyond Accuracy: Counterfactual Auditing of Long-Term Age
 
 ## Key Findings
 
-- **Accuracy hides memory failure modes.** Two agents can have similar final accuracy while using memory in different ways.
-- **Correct retrieval is not the same as causal control.** An agent can retrieve the right memory, but another stale or conflicting memory may still shape the final answer.
-- **Memory influence can be concentrated.** Some agents depend heavily on a small number of memory writes, so removing one write can change many answers.
-- **Memory design should match the task.** Systems built for dialogue continuity or persona simulation do not always work well for fine-grained factual memory QA.
+![Key findings](docs/key_findings.svg)
 
 ## What This Code Measures
 
