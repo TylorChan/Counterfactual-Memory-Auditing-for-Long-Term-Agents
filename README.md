@@ -4,8 +4,6 @@ This project evaluates long-term memory agents with counterfactual memory auditi
 
 ## Project Report
 
-Read the full report: [Beyond Accuracy: Counterfactual Auditing of Long-Term Agent Memory](docs/project_report.pdf)
-
 [![Report preview](docs/project_report_preview.png)](docs/project_report.pdf)
 
 ## Key Findings
