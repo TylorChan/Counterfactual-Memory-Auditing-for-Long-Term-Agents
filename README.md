@@ -4,9 +4,16 @@ This project evaluates long-term memory agents with counterfactual memory auditi
 
 ## Project Report
 
-Read the report on GitHub Pages: <https://tylorchan.github.io/Counterfactual-Memory-Auditing-for-Long-Term-Agents/>
+Read the full report: [Beyond Accuracy: Counterfactual Auditing of Long-Term Agent Memory](docs/project_report.pdf)
 
-Direct PDF link: [Beyond Accuracy: Counterfactual Auditing of Long-Term Agent Memory](docs/project_report.pdf)
+[![Report preview](docs/project_report_preview.png)](docs/project_report.pdf)
+
+## Key Findings
+
+- **Accuracy hides memory failure modes.** Two agents can have similar final accuracy while using memory in different ways.
+- **Correct retrieval is not the same as causal control.** An agent can retrieve the right memory, but another stale or conflicting memory may still shape the final answer.
+- **Memory influence can be concentrated.** Some agents depend heavily on a small number of memory writes, so removing one write can change many answers.
+- **Memory design should match the task.** Systems built for dialogue continuity or persona simulation do not always work well for fine-grained factual memory QA.
 
 ## What This Code Measures
 
