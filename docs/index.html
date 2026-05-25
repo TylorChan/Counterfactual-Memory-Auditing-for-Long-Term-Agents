@@ -3,128 +3,468 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Counterfactual Memory Auditing Report</title>
+    <title>Beyond Accuracy: Counterfactual Memory Auditing</title>
     <style>
       :root {
         color-scheme: light;
-        --theme-blue: #1131f5;
-        --ink: #111827;
-        --muted: #4b5563;
-        --line: #d1d5db;
-        --bg: #f8fafc;
+        --blue: #1131F5;
+        --ink: #0b0f19;
+        --muted: #536074;
+        --line: #d9deea;
+        --soft: #f7f9ff;
+        --white: #ffffff;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
-        min-height: 100vh;
-        background: var(--bg);
+        background: var(--white);
         color: var(--ink);
         font-family: Arial, Helvetica, sans-serif;
         line-height: 1.5;
       }
 
-      main {
-        width: min(1120px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 32px 0;
+      a {
+        color: var(--blue);
+        font-weight: 700;
+        text-decoration: none;
       }
 
-      header {
-        margin-bottom: 20px;
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(12px);
+      }
+
+      .topbar .shell {
+        display: flex;
+        min-height: 58px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .mark {
+        color: var(--blue);
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 0.92rem;
+      }
+
+      .hero {
+        padding: 72px 0 42px;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--blue);
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       h1 {
-        margin: 0 0 8px;
-        font-size: clamp(1.8rem, 4vw, 3rem);
-        line-height: 1.1;
+        max-width: 940px;
+        margin: 0;
+        font-size: clamp(2.5rem, 8vw, 6.2rem);
+        line-height: 0.94;
+        letter-spacing: 0;
       }
 
       h1 span {
-        color: var(--theme-blue);
-        font-weight: 800;
+        color: var(--blue);
       }
 
-      p {
-        max-width: 860px;
-        margin: 0 0 16px;
+      .lead {
+        max-width: 780px;
+        margin: 24px 0 0;
         color: var(--muted);
-        font-size: 1rem;
+        font-size: clamp(1rem, 2vw, 1.24rem);
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin: 18px 0 24px;
-      }
-
-      a {
-        color: var(--theme-blue);
-        font-weight: 700;
+        margin-top: 28px;
       }
 
       .button {
         display: inline-flex;
+        min-height: 44px;
         align-items: center;
-        min-height: 42px;
-        padding: 0 14px;
-        border: 1px solid var(--theme-blue);
+        justify-content: center;
+        border: 1px solid var(--blue);
         border-radius: 6px;
-        background: var(--theme-blue);
-        color: #ffffff;
+        padding: 0 16px;
+        background: var(--blue);
+        color: var(--white);
+        font-weight: 800;
+      }
+
+      .button:hover {
         text-decoration: none;
       }
 
       .button.secondary {
-        background: #ffffff;
-        color: var(--theme-blue);
+        background: var(--white);
+        color: var(--blue);
+      }
+
+      .section {
+        padding: 48px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .section-title {
+        display: grid;
+        grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+        gap: 32px;
+        align-items: start;
+        margin-bottom: 24px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.6rem, 3vw, 2.45rem);
+        line-height: 1.06;
+      }
+
+      .section-title p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.04rem;
+      }
+
+      .method {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .step,
+      .finding,
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--white);
+        padding: 18px;
+      }
+
+      .step-number {
+        display: inline-flex;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 18px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: var(--white);
+        font-weight: 800;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 1.02rem;
+      }
+
+      .step p,
+      .finding p,
+      .metric p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .figure-panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+      }
+
+      .figure-panel img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .caption {
+        margin: 0;
+        padding: 14px 16px;
+        border-top: 1px solid var(--line);
+        background: var(--white);
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .findings,
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .finding {
+        border-top: 4px solid var(--blue);
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--blue);
+        font-size: 1.55rem;
+        line-height: 1;
+      }
+
+      .report-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 18px;
+      }
+
+      .report-head p {
+        max-width: 680px;
+        margin: 8px 0 0;
+        color: var(--muted);
       }
 
       .pdf-frame {
         width: 100%;
-        height: min(78vh, 920px);
-        min-height: 620px;
+        height: min(82vh, 980px);
+        min-height: 680px;
         border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #ffffff;
+        border-radius: 8px;
+        background: var(--white);
       }
 
-      @media (max-width: 720px) {
-        main {
-          width: min(100% - 24px, 1120px);
-          padding: 20px 0;
+      footer {
+        padding: 28px 0 42px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      @media (max-width: 860px) {
+        .topbar {
+          position: static;
+        }
+
+        .section-title,
+        .method,
+        .findings,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .report-head {
+          display: block;
         }
 
         .pdf-frame {
-          min-height: 520px;
+          min-height: 540px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          width: min(100% - 24px, 1120px);
+        }
+
+        .topbar .shell {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 8px;
+          padding: 12px 0;
+        }
+
+        nav {
+          gap: 12px;
+        }
+
+        .hero {
+          padding: 44px 0 32px;
         }
       }
     </style>
   </head>
   <body>
+    <div class="topbar">
+      <div class="shell">
+        <a class="mark" href="#">Beyond Accuracy</a>
+        <nav aria-label="Page sections">
+          <a href="#method">Method</a>
+          <a href="#findings">Findings</a>
+          <a href="#report">Report</a>
+          <a href="https://github.com/TylorChan/Counterfactual-Memory-Auditing-for-Long-Term-Agents">Code</a>
+        </nav>
+      </div>
+    </div>
+
     <main>
-      <header>
+      <section class="hero shell">
+        <p class="eyebrow">Counterfactual auditing for long-term agent memory</p>
         <h1><span>Beyond Accuracy:</span> Counterfactual Auditing of Long-Term Agent Memory</h1>
-        <p>
-          This report explains how we evaluate long-term memory agents by tracing evidence writes,
-          removing selected writes, and measuring how the answer changes.
+        <p class="lead">
+          We evaluate memory agents by asking a causal question: if one traced memory write is removed,
+          does the final answer change? This shows whether a memory item was only retrieved or actually
+          controlled the answer.
         </p>
         <div class="actions">
-          <a class="button" href="project_report.pdf">Open PDF</a>
-          <a class="button secondary" href="https://github.com/TylorChan/Counterfactual-Memory-Auditing-for-Long-Term-Agents">View repository</a>
+          <a class="button" href="#report">Read report</a>
+          <a class="button secondary" href="project_report.pdf">Open PDF</a>
         </div>
-      </header>
+      </section>
 
-      <object class="pdf-frame" data="project_report.pdf" type="application/pdf">
-        <p>
-          Your browser cannot display the PDF inline.
-          <a href="project_report.pdf">Open the report PDF instead.</a>
-        </p>
-      </object>
+      <section class="section" id="method">
+        <div class="shell">
+          <div class="section-title">
+            <h2>Method</h2>
+            <p>
+              Accuracy tells us whether the final answer matches the gold answer. Our audit asks what
+              caused that answer. We trace evidence writes, remove one write, and replay the same query.
+            </p>
+          </div>
+          <div class="method">
+            <article class="step">
+              <span class="step-number">1</span>
+              <h3>Trace evidence writes</h3>
+              <p>We connect answer-stage evidence back to the original memory writes that produced it.</p>
+            </article>
+            <article class="step">
+              <span class="step-number">2</span>
+              <h3>Remove one write</h3>
+              <p>We delete one traced evidence write and keep the question fixed.</p>
+            </article>
+            <article class="step">
+              <span class="step-number">3</span>
+              <h3>Replay and compare</h3>
+              <p>We measure answer changes, abstention flips, and shifts in memory dependence.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell">
+          <div class="figure-panel">
+            <img src="assets/framework.png" alt="Counterfactual memory auditing framework">
+            <p class="caption">
+              The audit follows a normal run, traces evidence to memory writes, removes one write, and
+              compares the counterfactual answer with the baseline answer.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="findings">
+        <div class="shell">
+          <div class="section-title">
+            <h2>What this reveals</h2>
+            <p>
+              We use the intervention to separate final correctness from memory behavior. This makes
+              several hidden failure modes visible.
+            </p>
+          </div>
+          <div class="findings">
+            <article class="finding">
+              <h3>Accuracy hides failures</h3>
+              <p>Two agents can have similar accuracy while using memory in very different ways.</p>
+            </article>
+            <article class="finding">
+              <h3>Retrieval is not control</h3>
+              <p>An agent can retrieve the right memory without letting that memory dominate the answer.</p>
+            </article>
+            <article class="finding">
+              <h3>Influence can concentrate</h3>
+              <p>Some systems route many answers through a small number of influential memory writes.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell">
+          <div class="section-title">
+            <h2>Metrics</h2>
+            <p>
+              The report compares downstream accuracy with counterfactual signals that describe how memory
+              affects the answer.
+            </p>
+          </div>
+          <div class="metrics">
+            <article class="metric">
+              <strong>01</strong>
+              <h3>Answer flip rate</h3>
+              <p>How often the final answer changes after a traced write is removed.</p>
+            </article>
+            <article class="metric">
+              <strong>02</strong>
+              <h3>Counterfactual Gini</h3>
+              <p>Whether answer influence is spread out or concentrated in a few writes.</p>
+            </article>
+            <article class="metric">
+              <strong>03</strong>
+              <h3>Temporal horizon</h3>
+              <p>How far back the influential memory writes are from the query time.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="report">
+        <div class="shell">
+          <div class="report-head">
+            <div>
+              <h2>Full report</h2>
+              <p>Read the complete ACL-style report, including setup, related work, results, and discussion.</p>
+            </div>
+            <a class="button" href="project_report.pdf">Open PDF</a>
+          </div>
+          <object class="pdf-frame" data="project_report.pdf" type="application/pdf">
+            <p>
+              Your browser cannot display the PDF inline.
+              <a href="project_report.pdf">Open the report PDF instead.</a>
+            </p>
+          </object>
+        </div>
+      </section>
     </main>
+
+    <footer>
+      <div class="shell">
+        Counterfactual Memory Auditing for Long-Term Agents.
+      </div>
+    </footer>
   </body>
 </html>
