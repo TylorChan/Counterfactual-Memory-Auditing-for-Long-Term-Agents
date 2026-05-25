@@ -2,6 +2,12 @@
 
 This project evaluates long-term memory agents with counterfactual memory auditing. The core idea is simple: first run a memory agent normally on LongMemEval, trace which original memory writes reach the answer stage, remove one traced evidence write, replay the same question, and compare the baseline and counterfactual answers. This lets us test not only whether an agent is accurate, but also whether the right memory was retrieved and causally used.
 
+## Project Report
+
+Read the report on GitHub Pages: <https://tylorchan.github.io/Counterfactual-Memory-Auditing-for-Long-Term-Agents/>
+
+Direct PDF link: [Beyond Accuracy: Counterfactual Auditing of Long-Term Agent Memory](docs/project_report.pdf)
+
 ## What This Code Measures
 
 - **Baseline accuracy**: LongMemEval accuracy before any counterfactual intervention.

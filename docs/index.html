@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Counterfactual Memory Auditing Report</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --theme-blue: #1131f5;
+        --ink: #111827;
+        --muted: #4b5563;
+        --line: #d1d5db;
+        --bg: #f8fafc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.5;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0;
+      }
+
+      header {
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 4vw, 3rem);
+        line-height: 1.1;
+      }
+
+      h1 span {
+        color: var(--theme-blue);
+        font-weight: 800;
+      }
+
+      p {
+        max-width: 860px;
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 1rem;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 18px 0 24px;
+      }
+
+      a {
+        color: var(--theme-blue);
+        font-weight: 700;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 0 14px;
+        border: 1px solid var(--theme-blue);
+        border-radius: 6px;
+        background: var(--theme-blue);
+        color: #ffffff;
+        text-decoration: none;
+      }
+
+      .button.secondary {
+        background: #ffffff;
+        color: var(--theme-blue);
+      }
+
+      .pdf-frame {
+        width: 100%;
+        height: min(78vh, 920px);
+        min-height: 620px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #ffffff;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          width: min(100% - 24px, 1120px);
+          padding: 20px 0;
+        }
+
+        .pdf-frame {
+          min-height: 520px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1><span>Beyond Accuracy:</span> Counterfactual Auditing of Long-Term Agent Memory</h1>
+        <p>
+          This report explains how we evaluate long-term memory agents by tracing evidence writes,
+          removing selected writes, and measuring how the answer changes.
+        </p>
+        <div class="actions">
+          <a class="button" href="project_report.pdf">Open PDF</a>
+          <a class="button secondary" href="https://github.com/TylorChan/Counterfactual-Memory-Auditing-for-Long-Term-Agents">View repository</a>
+        </div>
+      </header>
+
+      <object class="pdf-frame" data="project_report.pdf" type="application/pdf">
+        <p>
+          Your browser cannot display the PDF inline.
+          <a href="project_report.pdf">Open the report PDF instead.</a>
+        </p>
+      </object>
+    </main>
+  </body>
+</html>
